@@ -1,0 +1,82 @@
+
+name: auxmos
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: i686-pc-windows-msvc
+      - name: Build Linda
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target i686-pc-windows-msvc --release
+      - name: Upload artifact (Linda)
+        uses: actions/upload-artifact@v1
+        with:
+          name: linda_auxmos.dll
+          path: target/i686-pc-windows-msvc/release/auxmos.dll
+      - name: Build Putnamos
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target i686-pc-windows-msvc --release --features putnamos
+      - name: Upload artifact (Putnamos)
+        uses: actions/upload-artifact@v1
+        with:
+          name: putnamos_auxmos.dll
+          path: target/i686-pc-windows-msvc/release/auxmos.dll
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      PKG_CONFIG_ALLOW_CROSS: 1
+    steps:
+      - uses: actions/checkout@v1
+      - run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install build-essential g++-multilib libc6-i386 libstdc++6:i386
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: i686-unknown-linux-gnu
+      - name: Check
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: check
+          args: --target i686-unknown-linux-gnu
+      - name: Build Linda
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target i686-unknown-linux-gnu --release
+      - name: Upload artifact (Linda)
+        uses: actions/upload-artifact@v1
+        with:
+          name: libauxmos.so
+          path: target/i686-unknown-linux-gnu/release/libauxmos.so
+      - name: Build Putnamos
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target i686-unknown-linux-gnu --release
+      - name: Upload artifact (Putnamos)
+        uses: actions/upload-artifact@v1
+        with:
+          name: putnamos_libauxmos.so
+          path: target/i686-unknown-linux-gnu/release/libauxmos.so
