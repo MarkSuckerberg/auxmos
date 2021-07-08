@@ -16,27 +16,16 @@ jobs:
         with:
           toolchain: stable
           target: i686-pc-windows-msvc
-      - name: Build Linda
+      - name: Build auxmos
         uses: actions-rs/cargo@v1
         with:
           toolchain: stable
           command: build
-          args: --target i686-pc-windows-msvc --release
-      - name: Upload artifact (Linda)
+          args: --target i686-pc-windows-msvc --release --features "all_reaction_hooks"
+      - name: Upload artifact
         uses: actions/upload-artifact@v1
         with:
-          name: linda_auxmos.dll
-          path: target/i686-pc-windows-msvc/release/auxmos.dll
-      - name: Build Putnamos
-        uses: actions-rs/cargo@v1
-        with:
-          toolchain: stable
-          command: build
-          args: --target i686-pc-windows-msvc --release --features putnamos
-      - name: Upload artifact (Putnamos)
-        uses: actions/upload-artifact@v1
-        with:
-          name: putnamos_auxmos.dll
+          name: auxmos.dll
           path: target/i686-pc-windows-msvc/release/auxmos.dll
   build-linux:
     runs-on: ubuntu-latest
@@ -58,25 +47,14 @@ jobs:
           toolchain: stable
           command: check
           args: --target i686-unknown-linux-gnu
-      - name: Build Linda
+      - name: Build auxmos
         uses: actions-rs/cargo@v1
         with:
           toolchain: stable
           command: build
-          args: --target i686-unknown-linux-gnu --release
-      - name: Upload artifact (Linda)
+          args: --target i686-unknown-linux-gnu --release --features "all_reaction_hooks"
+      - name: Upload artifact
         uses: actions/upload-artifact@v1
         with:
           name: libauxmos.so
-          path: target/i686-unknown-linux-gnu/release/libauxmos.so
-      - name: Build Putnamos
-        uses: actions-rs/cargo@v1
-        with:
-          toolchain: stable
-          command: build
-          args: --target i686-unknown-linux-gnu --release
-      - name: Upload artifact (Putnamos)
-        uses: actions/upload-artifact@v1
-        with:
-          name: putnamos_libauxmos.so
           path: target/i686-unknown-linux-gnu/release/libauxmos.so
