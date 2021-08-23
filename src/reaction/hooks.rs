@@ -287,6 +287,7 @@ fn fusion(byond_air: Value, holder: Value) {
 					.fold(0.0, |acc, (i, amt)| acc + gas_fusion_power(&i) * amt),
 			))
 		})?;
+	//The size of the phase space hypertorus
 	let toroidal_size = { if temperature_scale <= FUSION_BASE_TEMPSCALE {
 		TOROID_CALCULATED_THRESHOLD + (temperature_scale - FUSION_BASE_TEMPSCALE) / FUSION_BUFFER_DIVISOR
 	} else {
