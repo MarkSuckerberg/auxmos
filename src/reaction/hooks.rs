@@ -256,6 +256,141 @@ fn fusion(byond_air: Value, holder: Value) {
 	}
 }
 
+#[cfg(feature = "xenomedes_fusion")]
+#[hook("/datum/gas_reaction/fusion/react")]
+fn fusion(byond_air: Value, holder: Value) {
+	const TOROID_CALCULATED_THRESHOLD: f32 = 5.96;			// changing it by 0.1 generally doubles or halves fusion temps
+	const INSTABILITY_GAS_POWER_FACTOR: f32 = 3.0;
+	const PLASMA_BINDING_ENERGY: f32 = 20_000_000.0;
+	const FUSION_TRITIUM_MOLES_USED: f32 = 1.0;
+	const FUSION_INSTABILITY_ENDOTHERMALITY: f32 = 2.0;
+	const FUSION_TRITIUM_CONVERSION_COEFFICIENT: f32 = 0.002;
+	const FUSION_MOLE_THRESHOLD: f32 = 250.0;
+	const FUSION_SCALE_DIVISOR:f32 = 10.0;					// Used to be Pi
+	const FUSION_MINIMAL_SCALE:f32 = 50.0;
+	const FUSION_SLOPE_DIVISOR:f32 = 1250.0;				// This number is probably the safest number to change
+	const FUSION_ENERGY_TRANSLATION_EXPONENT:f32 = 1.25;	// This number is probably the most dangerous number to change
+	const FUSION_BASE_TEMPSCALE:f32	= 6.0;       			// This number is responsible for orchestrating fusion temperatures
+	const FUSION_MIDDLE_ENERGY_REFERENCE:f32 = 1E+6;		// This number is deceptively dangerous; sort of tied to TOROID_CALCULATED_THRESHOLD
+	const FUSION_BUFFER_DIVISOR:f32 = 1.0;					// Increase this to cull unrobust fusions faster
+	let plas = gas_idx_from_string(GAS_PLASMA)?;
+	let co2 = gas_idx_from_string(GAS_CO2)?;
+	let (initial_energy, initial_plasma, initial_carbon, scale_factor, temperature_scale, gas_power) =
+		with_mix(byond_air, |air| {
+			Ok((
+				air.thermal_energy(),
+				air.get_moles(plas),
+				air.get_moles(co2),
+				f32::max(air.volume / FUSION_SCALE_DIVISOR, FUSION_MINIMAL_SCALE),
+				f32::log(10.0, air.get_temperature()),
+				air.enumerate()
+					.fold(0.0, |acc, (i, amt)| acc + gas_fusion_power(&i) * amt),
+			))
+		})?;
+	let toroidal_size = { if temperature_scale <= FUSION_BASE_TEMPSCALE {
+		TOROID_CALCULATED_THRESHOLD + (temperature_scale - FUSION_BASE_TEMPSCALE) / FUSION_BUFFER_DIVISOR
+	} else {
+		TOROID_CALCULATED_THRESHOLD + 4.0_f32.powf(temperature_scale - FUSION_BASE_TEMPSCALE) / FUSION_SLOPE_DIVISOR
+	}
+	};
+	let instability = (gas_power * INSTABILITY_GAS_POWER_FACTOR)
+		.powi(2)
+		.rem_euclid(toroidal_size);
+	byond_air.call("set_analyzer_results", &[&Value::from(instability)])?;
+	let mut thermal_energy = initial_energy;
+
+	let mut plasma = (initial_plasma - FUSION_MOLE_THRESHOLD) / scale_factor;
+	let mut carbon = (initial_carbon - FUSION_MOLE_THRESHOLD) / scale_factor;
+
+	//count the rings. ss13's modulus is positive, this ain't, who knew
+	plasma = (plasma - instability * carbon.sin()).rem_euclid(toroidal_size);
+	carbon = (carbon - plasma).rem_euclid(toroidal_size);
+
+	//Energy is gained or lost corresponding to the creation or destruction of mass.
+	//Low instability prevents endothermality while higher instability acutally encourages it.
+	let delta_plasma = f32::min(initial_plasma - plasma, toroidal_size * scale_factor * 1.5);
+	let reaction_energy = {
+		if delta_plasma > 0.0 || instability <= FUSION_INSTABILITY_ENDOTHERMALITY {
+			f32::max(delta_plasma
+				* PLASMA_BINDING_ENERGY, 0.0)
+		} else {
+			delta_plasma * PLASMA_BINDING_ENERGY
+				* ((instability-FUSION_INSTABILITY_ENDOTHERMALITY).sqrt())
+		}
+	};
+	//To achieve faster equilibrium. Too bad it is not that good at cooling down.
+	if reaction_energy != 0.0 {
+		let middle_energy = (((TOROID_CALCULATED_THRESHOLD / 2.0) * scale_factor)
+			+ FUSION_MOLE_THRESHOLD)
+			* (200.0 * FUSION_MIDDLE_ENERGY_REFERENCE);
+		thermal_energy = middle_energy
+			* FUSION_ENERGY_TRANSLATION_EXPONENT
+			.powf(f32::log(10.0, thermal_energy / middle_energy));
+		//This bowdlerization is a double-edged sword. Tread with care!
+		let bowdlerized_reaction_energy = f32::clamp(reaction_energy,
+			thermal_energy * ((1.0 / (FUSION_ENERGY_TRANSLATION_EXPONENT.powi(2))) - 1.0),
+			thermal_energy * (FUSION_ENERGY_TRANSLATION_EXPONENT.powi(2) - 1.0));
+		thermal_energy = middle_energy
+			* 10_f32.powf(f32::log(FUSION_ENERGY_TRANSLATION_EXPONENT,
+			(thermal_energy + bowdlerized_reaction_energy)
+			/ middle_energy))
+	};
+
+	//The decay of the tritium and the reaction's energy produces waste gases, different ones depending on whether the reaction is endo or exothermic
+	let standard_waste_gas_output = scale_factor
+		* (FUSION_TRITIUM_CONVERSION_COEFFICIENT*FUSION_TRITIUM_MOLES_USED);
+
+	let standard_energy = with_mix_mut(byond_air, |air| {
+
+		//Scales the gases back up
+		air.set_moles(plas, plasma);
+		air.set_moles(co2, carbon);
+
+		//The reason why you should set up a tritium production line.
+		air.adjust_moles(gas_idx_from_string(GAS_TRITIUM).unwrap(), -FUSION_TRITIUM_MOLES_USED);
+
+		//Adds waste products
+		if delta_plasma > 0.0 {
+			air.adjust_moles(gas_idx_from_string(GAS_H2O).unwrap(), standard_waste_gas_output);
+		} else {
+			air.adjust_moles(gas_idx_from_string(GAS_BZ).unwrap(), standard_waste_gas_output);
+		}
+		air.adjust_moles(gas_idx_from_string(GAS_O2).unwrap(), standard_waste_gas_output); //Oxygen is a bit touchy subject
+
+		let new_heat_cap = air.heat_capacity();
+		let standard_energy = 400_f32 * air.get_moles(plas) * air.get_temperature(); //Prevents putting meaningless waste gases to achieve high rads.
+
+		//Change the temperature
+		if reaction_energy != 0.0 {
+			if new_heat_cap > MINIMUM_HEAT_CAPACITY{
+				air.set_temperature(f32::clamp(thermal_energy/new_heat_cap, TCMB, INFINITY));
+			}
+		} else if reaction_energy == 0.0
+			&& instability <= FUSION_INSTABILITY_ENDOTHERMALITY {
+			if new_heat_cap > MINIMUM_HEAT_CAPACITY{
+				air.set_temperature(f32::clamp(thermal_energy/new_heat_cap, TCMB, INFINITY));
+			}
+		}
+		air.garbage_collect();
+		Ok(standard_energy)
+	})?;
+	if reaction_energy != 0.0 {
+		Proc::find(byond_string!("/proc/fusion_ball"))
+			.unwrap()
+			.call(&[
+				holder,
+				&Value::from(reaction_energy),
+				&Value::from(standard_energy),
+			])?;
+		Ok(Value::from(1.0))
+	} else if reaction_energy == 0.0
+		&& instability <= FUSION_INSTABILITY_ENDOTHERMALITY {
+		Ok(Value::from(1.0))
+	} else {
+		Ok(Value::from(0.0))
+	}
+}
+
 #[cfg(feature = "generic_fire_hook")]
 #[hook("/datum/gas_reaction/genericfire/react")]
 fn _hook_generic_fire(byond_air: Value, holder: Value) {

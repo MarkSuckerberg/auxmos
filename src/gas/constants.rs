@@ -4,6 +4,8 @@ pub const R_IDEAL_GAS_EQUATION: f32 = 8.31;
 pub const ONE_ATMOSPHERE: f32 = 101.325;
 ///  -270.3degC
 pub const TCMB: f32 = 2.7;
+///  well, infinity in byond
+pub const INFINITY: f32 = 1E+31;
 ///  -48.15degC
 pub const TCRYO: f32 = 225.0;
 ///  0degC
