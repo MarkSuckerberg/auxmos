@@ -319,6 +319,7 @@ fn fusion(byond_air: Value, holder: Value) {
 				* ((instability-FUSION_INSTABILITY_ENDOTHERMALITY).sqrt())
 		}
 	};
+
 	//To achieve faster equilibrium. Too bad it is not that good at cooling down.
 	if reaction_energy != 0.0 {
 		let middle_energy = (((TOROID_CALCULATED_THRESHOLD / 2.0) * scale_factor)
@@ -344,8 +345,8 @@ fn fusion(byond_air: Value, holder: Value) {
 	let standard_energy = with_mix_mut(byond_air, |air| {
 
 		//Scales the gases back up
-		air.set_moles(plas, plasma);
-		air.set_moles(co2, carbon);
+		air.set_moles(plas, plasma*scale_factor + FUSION_MOLE_THRESHOLD);
+		air.set_moles(co2, carbon*scale_factor + FUSION_MOLE_THRESHOLD);
 
 		//The reason why you should set up a tritium production line.
 		air.adjust_moles(gas_idx_from_string(GAS_TRITIUM).unwrap(), -FUSION_TRITIUM_MOLES_USED);
