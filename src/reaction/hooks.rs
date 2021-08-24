@@ -281,39 +281,43 @@ fn fusion(byond_air: Value, holder: Value) {
 				air.thermal_energy(),
 				air.get_moles(plas),
 				air.get_moles(co2),
-				f32::max(air.volume / FUSION_SCALE_DIVISOR, FUSION_MINIMAL_SCALE),
-				f32::log(10.0, air.get_temperature()),
+				(air.volume / FUSION_SCALE_DIVISOR).max(FUSION_MINIMAL_SCALE),
+				air.get_temperature().log10(),
 				air.enumerate()
 					.fold(0.0, |acc, (i, amt)| acc + gas_fusion_power(&i) * amt),
 			))
 		})?;
 	//The size of the phase space hypertorus
-	let toroidal_size = { if temperature_scale <= FUSION_BASE_TEMPSCALE {
-		TOROID_CALCULATED_THRESHOLD + (temperature_scale - FUSION_BASE_TEMPSCALE) / FUSION_BUFFER_DIVISOR
+	let toroidal_size = TOROID_CALCULATED_THRESHOLD
+	+ { if temperature_scale <= FUSION_BASE_TEMPSCALE {
+		(temperature_scale - FUSION_BASE_TEMPSCALE) / FUSION_BUFFER_DIVISOR
 	} else {
-		TOROID_CALCULATED_THRESHOLD + 4.0_f32.powf(temperature_scale - FUSION_BASE_TEMPSCALE) / FUSION_SLOPE_DIVISOR
+		(4.0_f32.powf(temperature_scale - FUSION_BASE_TEMPSCALE)) / FUSION_SLOPE_DIVISOR
 	}
 	};
 	let instability = (gas_power * INSTABILITY_GAS_POWER_FACTOR)
-		.powi(2)
 		.rem_euclid(toroidal_size);
 	byond_air.call("set_analyzer_results", &[&Value::from(instability)])?;
 	let mut thermal_energy = initial_energy;
 
+	//We have to scale the amounts of carbon and plasma down a significant amount in order to show the chaotic dynamics we want
 	let mut plasma = (initial_plasma - FUSION_MOLE_THRESHOLD) / scale_factor;
+	//We also subtract out the threshold amount to make it harder for fusion to burn itself out.
 	let mut carbon = (initial_carbon - FUSION_MOLE_THRESHOLD) / scale_factor;
 
 	//count the rings. ss13's modulus is positive, this ain't, who knew
-	plasma = (plasma - instability * carbon.sin()).rem_euclid(toroidal_size);
+	plasma = (plasma - instability * carbon.to_degrees().sin()).rem_euclid(toroidal_size);
 	carbon = (carbon - plasma).rem_euclid(toroidal_size);
+
+	let delta_plasma = (initial_plasma - plasma).min(toroidal_size * scale_factor * 1.5);
 
 	//Energy is gained or lost corresponding to the creation or destruction of mass.
 	//Low instability prevents endothermality while higher instability acutally encourages it.
-	let delta_plasma = f32::min(initial_plasma - plasma, toroidal_size * scale_factor * 1.5);
+	//Reaction energy can be negative or positive, for both exothermic and endothermic reactions.
 	let reaction_energy = {
-		if delta_plasma > 0.0 || instability <= FUSION_INSTABILITY_ENDOTHERMALITY {
-			f32::max(delta_plasma
-				* PLASMA_BINDING_ENERGY, 0.0)
+		if (delta_plasma > 0.0) || (instability <= FUSION_INSTABILITY_ENDOTHERMALITY) {
+			(delta_plasma * PLASMA_BINDING_ENERGY)
+			.max(0.0)
 		} else {
 			delta_plasma * PLASMA_BINDING_ENERGY
 				* ((instability-FUSION_INSTABILITY_ENDOTHERMALITY).sqrt())
@@ -327,15 +331,14 @@ fn fusion(byond_air: Value, holder: Value) {
 			* (200.0 * FUSION_MIDDLE_ENERGY_REFERENCE);
 		thermal_energy = middle_energy
 			* FUSION_ENERGY_TRANSLATION_EXPONENT
-			.powf(f32::log(10.0, thermal_energy / middle_energy));
+			.powf((thermal_energy / middle_energy).log10());
 		//This bowdlerization is a double-edged sword. Tread with care!
-		let bowdlerized_reaction_energy = f32::clamp(reaction_energy,
+		let bowdlerized_reaction_energy = reaction_energy.clamp(
 			thermal_energy * ((1.0 / (FUSION_ENERGY_TRANSLATION_EXPONENT.powi(2))) - 1.0),
 			thermal_energy * (FUSION_ENERGY_TRANSLATION_EXPONENT.powi(2) - 1.0));
 		thermal_energy = middle_energy
-			* 10_f32.powf(f32::log(FUSION_ENERGY_TRANSLATION_EXPONENT,
-			(thermal_energy + bowdlerized_reaction_energy)
-			/ middle_energy))
+			* 10_f32.powf(((thermal_energy + bowdlerized_reaction_energy)
+			/ middle_energy).log(FUSION_ENERGY_TRANSLATION_EXPONENT))
 	};
 
 	//The decay of the tritium and the reaction's energy produces waste gases, different ones depending on whether the reaction is endo or exothermic
@@ -365,12 +368,12 @@ fn fusion(byond_air: Value, holder: Value) {
 		//Change the temperature
 		if reaction_energy != 0.0 {
 			if new_heat_cap > MINIMUM_HEAT_CAPACITY{
-				air.set_temperature(f32::clamp(thermal_energy/new_heat_cap, TCMB, INFINITY));
+				air.set_temperature((thermal_energy/new_heat_cap).clamp(TCMB, INFINITY));
 			}
 		} else if reaction_energy == 0.0
 			&& instability <= FUSION_INSTABILITY_ENDOTHERMALITY {
 			if new_heat_cap > MINIMUM_HEAT_CAPACITY{
-				air.set_temperature(f32::clamp(thermal_energy/new_heat_cap, TCMB, INFINITY));
+				air.set_temperature((thermal_energy/new_heat_cap).clamp(TCMB, INFINITY)); //THIS SHOULD STAY OR FUSION WILL EAT YOUR FACE
 			}
 		}
 		air.garbage_collect();
