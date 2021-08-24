@@ -275,6 +275,10 @@ fn fusion(byond_air: Value, holder: Value) {
 	const FUSION_BUFFER_DIVISOR:f32 = 1.0;					// Increase this to cull unrobust fusions faster
 	let plas = gas_idx_from_string(GAS_PLASMA)?;
 	let co2 = gas_idx_from_string(GAS_CO2)?;
+	let trit = gas_idx_from_string(GAS_TRITIUM)?;
+	let h2o = gas_idx_from_string(GAS_H2O)?;
+	let bz = gas_idx_from_string(GAS_BZ)?;
+	let o2 = gas_idx_from_string(GAS_O2)?;
 	let (initial_energy, initial_plasma, initial_carbon, scale_factor, temperature_scale, gas_power) =
 		with_mix(byond_air, |air| {
 			Ok((
@@ -306,8 +310,12 @@ fn fusion(byond_air: Value, holder: Value) {
 	let mut carbon = (initial_carbon - FUSION_MOLE_THRESHOLD) / scale_factor;
 
 	//count the rings. ss13's modulus is positive, this ain't, who knew
-	plasma = (plasma - instability * carbon.to_degrees().sin()).rem_euclid(toroidal_size);
+	plasma = (plasma - instability * carbon.sin()).rem_euclid(toroidal_size);
 	carbon = (carbon - plasma).rem_euclid(toroidal_size);
+
+	//Scales the gases back up
+	plasma = plasma * scale_factor + FUSION_MOLE_THRESHOLD;
+	carbon = carbon * scale_factor + FUSION_MOLE_THRESHOLD;
 
 	let delta_plasma = (initial_plasma - plasma).min(toroidal_size * scale_factor * 1.5);
 
@@ -347,20 +355,19 @@ fn fusion(byond_air: Value, holder: Value) {
 
 	let standard_energy = with_mix_mut(byond_air, |air| {
 
-		//Scales the gases back up
-		air.set_moles(plas, plasma*scale_factor + FUSION_MOLE_THRESHOLD);
-		air.set_moles(co2, carbon*scale_factor + FUSION_MOLE_THRESHOLD);
+		air.set_moles(plas, plasma);
+		air.set_moles(co2, carbon);
 
 		//The reason why you should set up a tritium production line.
-		air.adjust_moles(gas_idx_from_string(GAS_TRITIUM).unwrap(), -FUSION_TRITIUM_MOLES_USED);
+		air.adjust_moles(trit, -FUSION_TRITIUM_MOLES_USED);
 
 		//Adds waste products
 		if delta_plasma > 0.0 {
-			air.adjust_moles(gas_idx_from_string(GAS_H2O).unwrap(), standard_waste_gas_output);
+			air.adjust_moles(h2o, standard_waste_gas_output);
 		} else {
-			air.adjust_moles(gas_idx_from_string(GAS_BZ).unwrap(), standard_waste_gas_output);
+			air.adjust_moles(bz, standard_waste_gas_output);
 		}
-		air.adjust_moles(gas_idx_from_string(GAS_O2).unwrap(), standard_waste_gas_output); //Oxygen is a bit touchy subject
+		air.adjust_moles(o2, standard_waste_gas_output); //Oxygen is a bit touchy subject
 
 		let new_heat_cap = air.heat_capacity();
 		let standard_energy = 400_f32 * air.get_moles(plas) * air.get_temperature(); //Prevents putting meaningless waste gases to achieve high rads.
