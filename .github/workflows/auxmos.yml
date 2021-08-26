@@ -1,0 +1,60 @@
+
+name: auxmos
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: i686-pc-windows-msvc
+      - name: Build auxmos
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target i686-pc-windows-msvc --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook
+      - name: Upload artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: auxmos.dll
+          path: target/i686-pc-windows-msvc/release/auxmos.dll
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      PKG_CONFIG_ALLOW_CROSS: 1
+    steps:
+      - uses: actions/checkout@v1
+      - run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install build-essential g++-multilib libc6-i386 libstdc++6:i386
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: i686-unknown-linux-gnu
+      - name: Check
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: check
+          args: --target i686-unknown-linux-gnu
+      - name: Build auxmos
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: stable
+          command: build
+          args: --target i686-unknown-linux-gnu --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook
+      - name: Upload artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: libauxmos.so
+          path: target/i686-unknown-linux-gnu/release/libauxmos.so
