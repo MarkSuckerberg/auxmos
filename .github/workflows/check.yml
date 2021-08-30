@@ -16,4 +16,4 @@ jobs:
           sudo apt update
           sudo apt install g++-multilib -y
       - name: Check auxmos build
-        run: cargo check --target=i686-unknown-linux-gnu --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion,monstermos
+        run: cargo check --target=i686-unknown-linux-gnu --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion,slow_decompression
