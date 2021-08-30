@@ -20,6 +20,7 @@ xenomedes_fusion = []
 generic_fire_hook = ["reaction_hooks"]
 all_reaction_hooks = ["fusion_hook", "trit_fire_hook", "plasma_fire_hook", "generic_fire_hook"]
 explosive_decompression = ["monstermos"]
+slow_decompression = ["explosive_decompression"]
 putnamos_decompression = ["putnamos"]
 
 [lib]

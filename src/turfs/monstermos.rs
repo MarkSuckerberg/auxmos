@@ -24,6 +24,9 @@ struct MonstermosInfo {
 
 const OPP_DIR_INDEX: [usize; 7] = [1, 0, 3, 2, 5, 4, 6];
 
+//only used by slow decomp
+const _DECOMP_REMOVE_RATIO: f32 = 5.0;
+
 impl MonstermosInfo {
 	fn adjust_eq_movement(&mut self, adjacent: &mut Self, dir_index: usize, amount: f32) {
 		self.transfer_dirs[dir_index] += amount;
@@ -215,6 +218,8 @@ fn explosively_depressurize(
 		let cur_info = info.entry(*i).or_default().get_mut();
 		cur_info.curr_transfer_dir = 6;
 	}
+	let spess_turfs_len = progression_order.len();
+	let mut total_moles: f64 = 0.0;
 	cur_queue_idx = 0;
 	while cur_queue_idx < progression_order.len() {
 		let (i, m) = progression_order[cur_queue_idx];
@@ -237,10 +242,14 @@ fn explosively_depressurize(
 					unsafe { Value::turf_by_id_unchecked(loc) }
 						.set(byond_string!("pressure_specific_target"), &cur_target_turf)?;
 					adj_orig.set(adj_info);
+					total_moles += adj_m.total_moles() as f64;
 				}
 			}
 		}
 	}
+	let _moles_sucked = (total_moles
+		/ ((progression_order.len() - spess_turfs_len) as f64)) as f32
+		/ _DECOMP_REMOVE_RATIO;
 	let hpd = auxtools::Value::globals()
 		.get(byond_string!("SSair"))?
 		.get_list(byond_string!("high_pressure_delta"))
@@ -304,7 +313,16 @@ fn explosively_depressurize(
 				Value::from((1 << cur_info.curr_transfer_dir) as f32),
 			)?;
 		}
-		m.clear_air();
+
+		#[cfg(not(feature = "slow_decompression"))]
+		{
+			m.clear_air();
+		}
+		#[cfg(feature = "slow_decompression")]
+		{
+			m.clear_vol(_moles_sucked);
+		}
+
 		byond_turf.call("handle_decompression_floor_rip", &[&Value::from(sum)])?;
 	}
 	Ok(Value::null())

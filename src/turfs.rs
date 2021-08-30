@@ -118,6 +118,15 @@ impl TurfMixture {
 				.clear();
 		});
 	}
+	pub fn clear_vol(&self, amt: f32) {
+		GasArena::with_all_mixtures(|all_mixtures| {
+			all_mixtures
+				.get(self.mix)
+				.unwrap_or_else(|| panic!("Gas mixture not found for turf: {}", self.mix))
+				.write()
+				.remove(amt)
+		});
+	}
 	pub fn get_gas_copy(&self) -> Mixture {
 		let mut ret: Mixture = Mixture::new();
 		GasArena::with_all_mixtures(|all_mixtures| {
