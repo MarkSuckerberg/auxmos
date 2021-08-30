@@ -6,7 +6,7 @@ This code relies on some byond code on [this fork of Citadel](https://github.com
 
 The compiled binary on Citadel is compiled for Citadel's CPU, which therefore means that it uses [AVX2 fused-multiply-accumulate](https://en.wikipedia.org/wiki/Advanced_Vector_Extensions#Advanced_Vector_Extensions_2). Yes, really. If you have issues, compile it yourself, via `cargo rustc --target=i686-pc-windows-msvc --release --features "all_reaction_hooks" -- -C target-cpu=native`.
 
-IMPORTANT: For beecode, `--features "all_reaction_hooks"` will cause problems such as crashing, due to Bee having different fusion code. Replacing that argument with `--features trit_fire_hook,plasma_fire_hook,generic_fire_hook` will prevent auxtools from attempting to hook into fusion procs.
+IMPORTANT: For beecode, `--features "all_reaction_hooks"` will cause problems such as crashing, due to Bee having different fusion code. Use `--features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion` instead.
 
 TODO:
 I would quite a lot like monstermos to work.
