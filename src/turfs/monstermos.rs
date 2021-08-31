@@ -214,6 +214,9 @@ fn explosively_depressurize(
 			return Ok(Value::null()); // planet atmos > space
 		}
 	}
+	if progression_order.is_empty() {
+		return Ok(Value::null()); // I have no idea why, but it can have no elements during maploads in space
+	}
 	for (i, _) in progression_order.iter() {
 		let cur_info = info.entry(*i).or_default().get_mut();
 		cur_info.curr_transfer_dir = 6;
@@ -268,10 +271,12 @@ fn explosively_depressurize(
 			continue;
 		}
 		let mut in_hpd = false;
-		for k in 1..=hpd.len() {
-			if hpd.get(k).unwrap() == unsafe { Value::turf_by_id_unchecked(*i) } {
-				in_hpd = true;
-				break;
+		if hpd.len() > 0 {
+			for k in 1..=hpd.len() {
+				if hpd.get(k).unwrap() == unsafe { Value::turf_by_id_unchecked(*i) } {
+					in_hpd = true;
+					break;
+				}
 			}
 		}
 		if !in_hpd {
