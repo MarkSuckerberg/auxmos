@@ -268,10 +268,12 @@ fn explosively_depressurize(
 			continue;
 		}
 		let mut in_hpd = false;
-		for k in 1..=hpd.len() {
-			if hpd.get(k).unwrap() == unsafe { Value::turf_by_id_unchecked(*i) } {
-				in_hpd = true;
-				break;
+		if hpd.len() > 0 {
+			for k in 1..=hpd.len() {
+				if hpd.get(k).unwrap() == unsafe { Value::turf_by_id_unchecked(*i) } {
+					in_hpd = true;
+					break;
+				}
 			}
 		}
 		if !in_hpd {
