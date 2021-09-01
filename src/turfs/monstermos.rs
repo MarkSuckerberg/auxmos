@@ -198,10 +198,11 @@ fn explosively_depressurize(
 				continue;
 			}
 			for (_, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
-				let adj_m = {
-					*turf_gases().get(&loc).unwrap()
+				let mut insert_success = false;
+				if let Some(adj_m) = turf_gases().get(&loc) {
+					insert_success = turfs.insert((loc, *adj_m))
 				};
-				if turfs.insert((loc, adj_m)) {
+				if insert_success == true {
 					unsafe { Value::turf_by_id_unchecked(i) }.call(
 						"consider_firelocks",
 						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
@@ -267,9 +268,9 @@ fn explosively_depressurize(
 			continue;
 		}
 		let mut in_hpd = false;
-		if hpd.len() > 0 {
-			for k in 1..=hpd.len() {
-				if hpd.get(k).unwrap() == unsafe { Value::turf_by_id_unchecked(*i) } {
+		for k in 1..=hpd.len() {
+			if let Ok(hpd_val) = hpd.get(k) {
+				if hpd_val == unsafe { Value::turf_by_id_unchecked(*i) } {
 					in_hpd = true;
 					break;
 				}
@@ -279,10 +280,12 @@ fn explosively_depressurize(
 			hpd.append(&unsafe { Value::turf_by_id_unchecked(*i) });
 		}
 		let loc = adjacent_tile_id(cur_info.curr_transfer_dir as u8, *i, max_x, max_y);
-		let adj_m = {
-			*turf_gases().get(&loc).unwrap()
+		let mut sum = 0.0_f32;
+
+		if let Some(adj_m) = turf_gases().get(&loc) {
+			sum = adj_m.total_moles();
 		};
-		let sum = adj_m.total_moles();
+
 		cur_info.curr_transfer_amount += sum;
 		cur_orig.set(cur_info);
 
