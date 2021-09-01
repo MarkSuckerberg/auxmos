@@ -198,10 +198,11 @@ fn explosively_depressurize(
 				continue;
 			}
 			for (_, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
-				let adj_m = {
-					*turf_gases().get(&loc).unwrap()
+				let mut insert_success = false;
+				if let Some(adj_m) = turf_gases().get(&loc) {
+					insert_success = turfs.insert((loc, *adj_m))
 				};
-				if turfs.insert((loc, adj_m)) {
+				if insert_success == true {
 					unsafe { Value::turf_by_id_unchecked(i) }.call(
 						"consider_firelocks",
 						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
@@ -213,9 +214,6 @@ fn explosively_depressurize(
 		if warned_about_planet_atmos {
 			return Ok(Value::null()); // planet atmos > space
 		}
-	}
-	if progression_order.is_empty() {
-		return Ok(Value::null()); // I have no idea why, but it can have no elements during maploads in space
 	}
 	for (i, _) in progression_order.iter() {
 		let cur_info = info.entry(*i).or_default().get_mut();
@@ -231,21 +229,20 @@ fn explosively_depressurize(
 			continue;
 		}
 		for (j, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
-			let adj_m = {
-				*turf_gases().get(&loc).unwrap()
-			};
-			let adj_orig = info.entry(loc).or_default();
-			let mut adj_info = adj_orig.get();
-			if !adj_m.is_immutable() {
-				if progression_order.insert((loc, adj_m)) {
-					adj_info.curr_transfer_dir = OPP_DIR_INDEX[j as usize];
-					adj_info.curr_transfer_amount = 0.0;
-					let cur_target_turf = unsafe { Value::turf_by_id_unchecked(i) }
-						.get(byond_string!("pressure_specific_target"))?;
-					unsafe { Value::turf_by_id_unchecked(loc) }
-						.set(byond_string!("pressure_specific_target"), &cur_target_turf)?;
-					adj_orig.set(adj_info);
-					total_moles += adj_m.total_moles() as f64;
+			if let Some(adj_m) = { turf_gases().get(&loc) } {
+				let adj_orig = info.entry(loc).or_default();
+				let mut adj_info = adj_orig.get();
+				if !adj_m.is_immutable() {
+					if progression_order.insert((loc, *adj_m)) {
+						adj_info.curr_transfer_dir = OPP_DIR_INDEX[j as usize];
+						adj_info.curr_transfer_amount = 0.0;
+						let cur_target_turf = unsafe { Value::turf_by_id_unchecked(i) }
+							.get(byond_string!("pressure_specific_target"))?;
+						unsafe { Value::turf_by_id_unchecked(loc) }
+							.set(byond_string!("pressure_specific_target"), &cur_target_turf)?;
+						adj_orig.set(adj_info);
+						total_moles += adj_m.total_moles() as f64;
+					}
 				}
 			}
 		}
@@ -271,9 +268,9 @@ fn explosively_depressurize(
 			continue;
 		}
 		let mut in_hpd = false;
-		if hpd.len() > 0 {
-			for k in 1..=hpd.len() {
-				if hpd.get(k).unwrap() == unsafe { Value::turf_by_id_unchecked(*i) } {
+		for k in 1..=hpd.len() {
+			if let Ok(hpd_val) = hpd.get(k) {
+				if hpd_val == unsafe { Value::turf_by_id_unchecked(*i) } {
 					in_hpd = true;
 					break;
 				}
@@ -283,10 +280,12 @@ fn explosively_depressurize(
 			hpd.append(&unsafe { Value::turf_by_id_unchecked(*i) });
 		}
 		let loc = adjacent_tile_id(cur_info.curr_transfer_dir as u8, *i, max_x, max_y);
-		let adj_m = {
-			*turf_gases().get(&loc).unwrap()
+		let mut sum = 0.0_f32;
+
+		if let Some(adj_m) = turf_gases().get(&loc) {
+			sum = adj_m.total_moles();
 		};
-		let sum = adj_m.total_moles();
+
 		cur_info.curr_transfer_amount += sum;
 		cur_orig.set(cur_info);
 
