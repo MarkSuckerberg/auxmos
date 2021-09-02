@@ -25,7 +25,7 @@ struct MonstermosInfo {
 const OPP_DIR_INDEX: [usize; 7] = [1, 0, 3, 2, 5, 4, 6];
 
 //only used by slow decomp
-const _DECOMP_REMOVE_RATIO: f32 = 5.0;
+const _DECOMP_REMOVE_RATIO: f32 = 1.5;
 
 impl MonstermosInfo {
 	fn adjust_eq_movement(&mut self, adjacent: &mut Self, dir_index: usize, amount: f32) {
