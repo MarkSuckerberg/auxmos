@@ -25,7 +25,7 @@ struct MonstermosInfo {
 const OPP_DIR_INDEX: [usize; 7] = [1, 0, 3, 2, 5, 4, 6];
 
 //only used by slow decomp
-const _DECOMP_REMOVE_RATIO: f32 = 1.5;
+const DECOMP_REMOVE_RATIO: f32 = 4_f32;
 
 impl MonstermosInfo {
 	fn adjust_eq_movement(&mut self, adjacent: &mut Self, dir_index: usize, amount: f32) {
@@ -247,9 +247,13 @@ fn explosively_depressurize(
 			}
 		}
 	}
-	let _moles_sucked = (total_moles
+	let mut slowable = false;
+	if progression_order.len() < 500 {
+		slowable = true
+	}
+	let moles_sucked = (total_moles
 		/ ((progression_order.len() - spess_turfs_len) as f64)) as f32
-		/ _DECOMP_REMOVE_RATIO;
+		/ DECOMP_REMOVE_RATIO;
 	let hpd = auxtools::Value::globals()
 		.get(byond_string!("SSair"))?
 		.get_list(byond_string!("high_pressure_delta"))
@@ -318,13 +322,10 @@ fn explosively_depressurize(
 			)?;
 		}
 
-		#[cfg(not(feature = "slow_decompression"))]
-		{
+		if slowable == true {
+			m.clear_vol(moles_sucked);
+		} else {
 			m.clear_air();
-		}
-		#[cfg(feature = "slow_decompression")]
-		{
-			m.clear_vol(_moles_sucked);
 		}
 
 		byond_turf.call("handle_decompression_floor_rip", &[&Value::from(sum)])?;

@@ -21,7 +21,7 @@ jobs:
         with:
           toolchain: stable
           command: build
-          args: --target i686-pc-windows-msvc --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion,slow_decompression
+          args: --target i686-pc-windows-msvc --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion,explosive_decompression
       - name: Upload artifact
         uses: actions/upload-artifact@v1
         with:
@@ -52,7 +52,7 @@ jobs:
         with:
           toolchain: stable
           command: build
-          args: --target i686-unknown-linux-gnu --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion,slow_decompression
+          args: --target i686-unknown-linux-gnu --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion,explosive_decompression
       - name: Upload artifact
         uses: actions/upload-artifact@v1
         with:
