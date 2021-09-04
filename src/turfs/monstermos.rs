@@ -12,6 +12,22 @@ type TransferInfo = [f32; 7];
 
 type MixWithID = (TurfID, TurfMixture);
 
+#[cfg(feature = "explosive_decompression")]
+#[hook("/turf/proc/register_firelocks")]
+fn _hook_register_firelocks() {
+	let id = unsafe { src.raw.data.id };
+	firelock_turfs().insert(id, ());
+	Ok(Value::null())
+}
+
+#[cfg(feature = "explosive_decompression")]
+#[hook("/turf/proc/unregister_firelocks")]
+fn _hook_unregister_firelocks() {
+	let id = unsafe { src.raw.data.id };
+	firelock_turfs().remove(&id);
+	Ok(Value::null())
+}
+
 #[derive(Copy, Clone, Default)]
 struct MonstermosInfo {
 	transfer_dirs: TransferInfo,
@@ -203,10 +219,12 @@ fn explosively_depressurize(
 					insert_success = turfs.insert((loc, *adj_m))
 				};
 				if insert_success == true {
-					unsafe { Value::turf_by_id_unchecked(i) }.call(
-						"consider_firelocks",
-						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
-					)?;
+					if firelock_turfs().contains_key(&loc) {
+						unsafe { Value::turf_by_id_unchecked(i) }.call(
+							"consider_firelocks",
+							&[&unsafe { Value::turf_by_id_unchecked(loc) }],
+						)?;
+					}
 					info.entry(loc).or_default().take();
 				}
 			}
@@ -219,8 +237,6 @@ fn explosively_depressurize(
 		let cur_info = info.entry(*i).or_default().get_mut();
 		cur_info.curr_transfer_dir = 6;
 	}
-	let spess_turfs_len = progression_order.len();
-	let mut total_moles: f64 = 0.0;
 	cur_queue_idx = 0;
 	while cur_queue_idx < progression_order.len() {
 		let (i, m) = progression_order[cur_queue_idx];
@@ -241,7 +257,6 @@ fn explosively_depressurize(
 						unsafe { Value::turf_by_id_unchecked(loc) }
 							.set(byond_string!("pressure_specific_target"), &cur_target_turf)?;
 						adj_orig.set(adj_info);
-						total_moles += adj_m.total_moles() as f64;
 					}
 				}
 			}
@@ -251,9 +266,6 @@ fn explosively_depressurize(
 	if progression_order.len() < 500 {
 		slowable = true
 	}
-	let moles_sucked = (total_moles
-		/ ((progression_order.len() - spess_turfs_len) as f64)) as f32
-		/ DECOMP_REMOVE_RATIO;
 	let hpd = auxtools::Value::globals()
 		.get(byond_string!("SSair"))?
 		.get_list(byond_string!("high_pressure_delta"))
@@ -323,7 +335,7 @@ fn explosively_depressurize(
 		}
 
 		if slowable == true {
-			m.clear_vol(moles_sucked);
+			m.clear_vol(m.total_moles() /DECOMP_REMOVE_RATIO);
 		} else {
 			m.clear_air();
 		}
