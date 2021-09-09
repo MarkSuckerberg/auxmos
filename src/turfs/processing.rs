@@ -85,24 +85,10 @@ fn _process_turf_hook() {
 			.unwrap_or(1.0) as i32;
 		let equalize_turf_limit = src
 			.get_number(byond_string!("equalize_turf_limit"))
-			.map_err(|_| {
-				runtime!(
-					"Attempt to interpret non-number value as number {} {}:{}",
-					std::file!(),
-					std::line!(),
-					std::column!()
-				)
-			})? as usize;
+			.unwrap_or(100.0) as usize;
 		let equalize_hard_turf_limit = src
 			.get_number(byond_string!("equalize_hard_turf_limit"))
-			.map_err(|_| {
-				runtime!(
-					"Attempt to interpret non-number value as number {} {}:{}",
-					std::file!(),
-					std::line!(),
-					std::column!()
-				)
-			})? as usize;
+			.unwrap_or(2000.0) as usize;
 		let equalize_enabled = cfg!(feature = "equalization")
 			&& src
 				.get_number(byond_string!("equalize_enabled"))
@@ -116,14 +102,7 @@ fn _process_turf_hook() {
 				})? != 0.0;
 		let group_pressure_goal = src
 			.get_number(byond_string!("excited_group_pressure_goal"))
-			.map_err(|_| {
-				runtime!(
-					"Attempt to interpret non-number value as number {} {}:{}",
-					std::file!(),
-					std::line!(),
-					std::column!()
-				)
-			})?;
+			.unwrap_or(0.5);
 		let max_x = auxtools::Value::world()
 			.get_number(byond_string!("maxx"))
 			.map_err(|_| {
@@ -144,6 +123,9 @@ fn _process_turf_hook() {
 					std::column!()
 				)
 			})? as i32;
+		let planet_enabled: bool =
+			src.get_number(byond_string!("planet_equalize_enabled"))
+				.unwrap_or(1.0) != 0.0;
 		rayon::spawn(move || {
 			PROCESSING_TURF_STEP.store(PROCESS_PROCESSING, Ordering::SeqCst);
 			let sender = byond_callback_sender();
@@ -230,6 +212,7 @@ fn _process_turf_hook() {
 							max_x,
 							max_y,
 							high_pressure_turfs,
+							planet_enabled,
 						)
 					}
 					#[cfg(not(feature = "equalization"))]
@@ -538,28 +521,30 @@ fn excited_group_processing(
 					}
 					if let Some((i, turf)) = border_turfs.pop_front() {
 						let adj_tiles = adjacent_tile_ids(turf.adjacency, i, max_x, max_y);
-						let mix = all_mixtures.get(turf.mix).unwrap().read();
-						let pressure = mix.return_pressure();
-						let this_max = max_pressure.max(pressure);
-						let this_min = min_pressure.min(pressure);
-						if (this_max - this_min).abs() >= pressure_goal {
-							continue;
-						}
-						min_pressure = this_min;
-						max_pressure = this_max;
-						turfs.push(turf);
-						fully_mixed.merge(&mix);
-						fully_mixed.volume += mix.volume;
-						for (_, loc) in adj_tiles {
-							if found_turfs.contains(&loc) {
+						if let Some(lock) = all_mixtures.get(turf.mix) {
+							let mix = lock.read();
+							let pressure = mix.return_pressure();
+							let this_max = max_pressure.max(pressure);
+							let this_min = min_pressure.min(pressure);
+							if (this_max - this_min).abs() >= pressure_goal {
 								continue;
 							}
-							found_turfs.insert(loc);
-							if let Some(border_mix) = turf_gases().get(&loc) {
-								if border_mix.simulation_level & SIMULATION_LEVEL_DISABLED
-									!= SIMULATION_LEVEL_DISABLED
-								{
-									border_turfs.push_back((loc, *border_mix));
+							min_pressure = this_min;
+							max_pressure = this_max;
+							turfs.push(turf);
+							fully_mixed.merge(&mix);
+							fully_mixed.volume += mix.volume;
+							for (_, loc) in adj_tiles {
+								if found_turfs.contains(&loc) {
+									continue;
+								}
+								found_turfs.insert(loc);
+								if let Some(border_mix) = turf_gases().get(&loc) {
+									if border_mix.simulation_level & SIMULATION_LEVEL_DISABLED
+										!= SIMULATION_LEVEL_DISABLED
+									{
+										border_turfs.push_back((loc, *border_mix));
+									}
 								}
 							}
 						}
@@ -569,9 +554,10 @@ fn excited_group_processing(
 				}
 				fully_mixed.multiply(1.0 / turfs.len() as f32);
 				if !fully_mixed.is_corrupt() {
-					turfs.par_iter().for_each(|turf| {
-						let mut mix = all_mixtures.get(turf.mix).unwrap().write();
-						mix.copy_from_mutable(&fully_mixed);
+					turfs.par_iter().with_min_len(125).for_each(|turf| {
+						if let Some(mix_lock) = all_mixtures.get(turf.mix) {
+							mix_lock.write().copy_from_mutable(&fully_mixed);
+						}
 					});
 				}
 			});
@@ -595,7 +581,7 @@ fn remove_trace_planet_gases(
 			.and_then(RwLock::try_read)
 			.map_or(false, |gas| !gas.compare_with(planet_atmos, 0.1))
 		{
-			if let Some(mut gas) = all_mixtures.get(m.mix).unwrap().try_write() {
+			if let Some(mut gas) = all_mixtures.get(m.mix).and_then(|lock| lock.try_write()) {
 				gas.copy_from_mutable(planet_atmos);
 			}
 		}
@@ -854,7 +840,11 @@ fn _process_heat_hook() {
 				.par_iter()
 				.with_min_len(100)
 				.for_each(|&(i, new_temp)| {
-					let t: &mut ThermalInfo = &mut turf_temperatures().get_mut(&i).unwrap();
+					let maybe_t = turf_temperatures().get_mut(&i);
+					if maybe_t.is_none() {
+						return;
+					}
+					let t: &mut ThermalInfo = &mut maybe_t.unwrap();
 					t.temperature = turf_gases()
 						.get(&i)
 						.filter(|m| {
