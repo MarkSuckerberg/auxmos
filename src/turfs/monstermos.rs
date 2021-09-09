@@ -738,7 +738,7 @@ pub(crate) fn equalize(
 	max_x: i32,
 	max_y: i32,
 	high_pressure_turfs: BTreeSet<TurfID>,
-	do_planet_atmos: bool,
+	_do_planet_atmos: bool,
 ) -> usize {
 	let mut info: HashMap<TurfID, Cell<MonstermosInfo>> = HashMap::new();
 	let mut turfs_processed = 0;
