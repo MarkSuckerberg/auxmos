@@ -123,9 +123,6 @@ fn _process_turf_hook() {
 					std::column!()
 				)
 			})? as i32;
-		let planet_enabled: bool =
-			src.get_number(byond_string!("planet_equalize_enabled"))
-				.unwrap_or(1.0) != 0.0;
 		rayon::spawn(move || {
 			PROCESSING_TURF_STEP.store(PROCESS_PROCESSING, Ordering::SeqCst);
 			let sender = byond_callback_sender();
@@ -212,7 +209,6 @@ fn _process_turf_hook() {
 							max_x,
 							max_y,
 							high_pressure_turfs,
-							planet_enabled,
 						)
 					}
 					#[cfg(not(feature = "equalization"))]

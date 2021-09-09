@@ -738,7 +738,6 @@ pub(crate) fn equalize(
 	max_x: i32,
 	max_y: i32,
 	high_pressure_turfs: BTreeSet<TurfID>,
-	_do_planet_atmos: bool,
 ) -> usize {
 	let mut info: HashMap<TurfID, Cell<MonstermosInfo>> = HashMap::new();
 	let mut turfs_processed = 0;
@@ -785,14 +784,6 @@ pub(crate) fn equalize(
 			}
 		}
 		let average_moles = (total_moles / (turfs.len() - planet_turfs.len()) as f64) as f32;
-		/*
-		let (mut giver_turfs, mut taker_turfs): (Vec<_>, Vec<_>) =
-			turfs.iter().partition(|&(i, m)| {
-				let cur_info = info.entry(*i).or_default().get_mut();
-				cur_info.mole_delta = m.total_moles() - average_moles;
-				cur_info.mole_delta > 0.0
-			});
-		*/
 
 		let mut giver_turfs:Vec<MixWithID> = Vec::new();
 		let mut taker_turfs:Vec<MixWithID> = Vec::new();
