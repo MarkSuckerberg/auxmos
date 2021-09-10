@@ -353,7 +353,8 @@ fn flood_fill_equalize_turfs(
 	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
 ) -> Option<(IndexSet<MixWithID>, IndexSet<MixWithID>, f64)> {
 	let mut turfs: IndexSet<MixWithID> = IndexSet::with_capacity(equalize_hard_turf_limit);
-	let mut border_turfs: std::collections::VecDeque<MixWithID> = std::collections::VecDeque::with_capacity(equalize_turf_limit);
+	let mut border_turfs: std::collections::VecDeque<MixWithID>
+		= std::collections::VecDeque::with_capacity(equalize_turf_limit);
 	let mut planet_turfs: IndexSet<MixWithID> = IndexSet::new();
 	#[cfg(feature = "explosive_decompression")]
 	let sender = byond_callback_sender();
@@ -543,9 +544,12 @@ fn give_to_takers(
 			if let Some(turf_orig) = info.get(&idx) {
 				let mut turf_info = turf_orig.get();
 				if turf_info.curr_transfer_amount != 0.0 && turf_info.curr_transfer_dir != 6 {
-					let adj_tile_id =
-						adjacent_tile_id(turf_info.curr_transfer_dir as u8, idx, max_x, max_y);
-					if let Some(adj_orig) = info.get(&adj_tile_id) {
+					if let Some(adj_orig) = info.get(&adjacent_tile_id(
+						turf_info.curr_transfer_dir as u8,
+						idx,
+						max_x,
+						max_y,
+					)) {
 						let mut adj_info = adj_orig.get();
 						turf_info.adjust_eq_movement(
 							&mut adj_info,
@@ -600,7 +604,7 @@ fn take_from_givers(
 					if let Some(adj_mix) = turf_gases().get(&loc) {
 						let mut adj_info = adj_orig.get();
 						if adj_info.last_slow_queue_cycle != *queue_cycle_slow {
-							queue.push((loc, *adj_mix));
+							queue.push((loc, *adj_mix.value()));
 							adj_info.last_slow_queue_cycle = *queue_cycle_slow;
 							adj_info.curr_transfer_dir = OPP_DIR_INDEX[j as usize];
 							adj_info.curr_transfer_amount = 0.0;
