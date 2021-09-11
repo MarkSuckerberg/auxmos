@@ -354,7 +354,7 @@ fn flood_fill_equalize_turfs(
 ) -> Option<(IndexSet<MixWithID>, IndexSet<MixWithID>, f64)> {
 	let mut turfs: IndexSet<MixWithID> = IndexSet::with_capacity(equalize_hard_turf_limit);
 	let mut border_turfs: std::collections::VecDeque<MixWithID>
-		= std::collections::VecDeque::with_capacity(equalize_turf_limit);
+		= std::collections::VecDeque::with_capacity(equalize_hard_turf_limit);
 	let mut planet_turfs: IndexSet<MixWithID> = IndexSet::new();
 	#[cfg(feature = "explosive_decompression")]
 	let sender = byond_callback_sender();
