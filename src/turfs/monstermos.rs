@@ -1,6 +1,6 @@
 use super::*;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use indexmap::IndexSet;
 
@@ -349,7 +349,7 @@ fn flood_fill_equalize_turfs(
 	equalize_hard_turf_limit: usize,
 	max_x: i32,
 	max_y: i32,
-	found_turfs: &mut BTreeSet<TurfID>,
+	found_turfs: &mut HashSet<TurfID>,
 	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
 ) -> Option<(IndexSet<MixWithID>, IndexSet<MixWithID>, f64)> {
 	let mut turfs: IndexSet<MixWithID> = IndexSet::with_capacity(equalize_hard_turf_limit);
@@ -381,8 +381,10 @@ fn flood_fill_equalize_turfs(
 						let adj_orig = info.entry(loc).or_default();
 						#[cfg(feature = "explosive_decompression")]
 						{
-							adj_orig.take();
-							border_turfs.push_back((loc, *adj_turf.value()));
+							if adj_turf.enabled() {
+								adj_orig.take();
+								border_turfs.push_back((loc, *adj_turf.value()));
+							}
 							if adj_turf.value().is_immutable() {
 								// Uh oh! looks like someone opened an airlock to space! TIME TO SUCK ALL THE AIR OUT!!!
 								// NOT ONE OF YOU IS GONNA SURVIVE THIS
@@ -746,7 +748,7 @@ pub(crate) fn equalize(
 	let mut info: HashMap<TurfID, Cell<MonstermosInfo>> = HashMap::new();
 	let mut turfs_processed = 0;
 	let mut queue_cycle_slow = 1;
-	let mut found_turfs: BTreeSet<TurfID> = BTreeSet::new();
+	let mut found_turfs: HashSet<TurfID> = HashSet::new();
 	for &i in high_pressure_turfs.iter() {
 		if found_turfs.contains(&i)
 			|| turf_gases().get(&i).map_or(true, |m| {
