@@ -381,10 +381,8 @@ fn flood_fill_equalize_turfs(
 						let adj_orig = info.entry(loc).or_default();
 						#[cfg(feature = "explosive_decompression")]
 						{
-							if adj_turf.enabled() {
-								adj_orig.take();
-								border_turfs.push_back((loc, *adj_turf.value()));
-							}
+							adj_orig.take();
+							border_turfs.push_back((loc, *adj_turf.value()));
 							if adj_turf.value().is_immutable() {
 								// Uh oh! looks like someone opened an airlock to space! TIME TO SUCK ALL THE AIR OUT!!!
 								// NOT ONE OF YOU IS GONNA SURVIVE THIS
