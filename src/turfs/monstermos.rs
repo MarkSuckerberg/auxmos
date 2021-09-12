@@ -1,6 +1,6 @@
 use super::*;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use indexmap::IndexSet;
 
@@ -233,6 +233,8 @@ fn explosively_depressurize(
 		cur_info.curr_transfer_dir = 6;
 	}
 	cur_queue_idx = 0;
+	let mut space_turf_len = 0;
+	let mut total_moles = 0_f64;
 	while cur_queue_idx < progression_order.len() {
 		let (i, m) = progression_order[cur_queue_idx];
 		cur_queue_idx += 1;
@@ -245,6 +247,7 @@ fn explosively_depressurize(
 				let mut adj_info = adj_orig.get();
 				if !adj_m.is_immutable() {
 					if progression_order.insert((loc, *adj_m)) {
+						total_moles += adj_m.total_moles() as f64;
 						adj_info.curr_transfer_dir = OPP_DIR_INDEX[j as usize];
 						adj_info.curr_transfer_amount = 0.0;
 						let cur_target_turf = unsafe { Value::turf_by_id_unchecked(i) }
@@ -253,10 +256,15 @@ fn explosively_depressurize(
 							.set(byond_string!("pressure_specific_target"), &cur_target_turf)?;
 						adj_orig.set(adj_info);
 					}
+				} else {
+					space_turf_len += 1;
 				}
 			}
 		}
 	}
+
+	let average_moles = (total_moles / (progression_order.len() - space_turf_len) as f64) as f32;
+
 	let mut slowable = false;
 	if progression_order.len() < 500 {
 		slowable = true
@@ -330,7 +338,7 @@ fn explosively_depressurize(
 		}
 
 		if slowable == true {
-			m.clear_vol(m.total_moles() /DECOMP_REMOVE_RATIO);
+			m.clear_vol((m.total_moles() - (average_moles / DECOMP_REMOVE_RATIO)).abs());
 		} else {
 			m.clear_air();
 		}
@@ -349,12 +357,12 @@ fn flood_fill_equalize_turfs(
 	equalize_hard_turf_limit: usize,
 	max_x: i32,
 	max_y: i32,
-	found_turfs: &mut BTreeSet<TurfID>,
+	found_turfs: &mut HashSet<TurfID>,
 	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
 ) -> Option<(IndexSet<MixWithID>, IndexSet<MixWithID>, f64)> {
 	let mut turfs: IndexSet<MixWithID> = IndexSet::with_capacity(equalize_hard_turf_limit);
 	let mut border_turfs: std::collections::VecDeque<MixWithID>
-		= std::collections::VecDeque::with_capacity(equalize_turf_limit);
+		= std::collections::VecDeque::with_capacity(equalize_hard_turf_limit);
 	let mut planet_turfs: IndexSet<MixWithID> = IndexSet::new();
 	#[cfg(feature = "explosive_decompression")]
 	let sender = byond_callback_sender();
@@ -746,7 +754,7 @@ pub(crate) fn equalize(
 	let mut info: HashMap<TurfID, Cell<MonstermosInfo>> = HashMap::new();
 	let mut turfs_processed = 0;
 	let mut queue_cycle_slow = 1;
-	let mut found_turfs: BTreeSet<TurfID> = BTreeSet::new();
+	let mut found_turfs: HashSet<TurfID> = HashSet::new();
 	for &i in high_pressure_turfs.iter() {
 		if found_turfs.contains(&i)
 			|| turf_gases().get(&i).map_or(true, |m| {
