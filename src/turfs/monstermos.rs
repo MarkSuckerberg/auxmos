@@ -338,7 +338,7 @@ fn explosively_depressurize(
 		}
 
 		if slowable == true {
-			m.clear_vol((m.total_moles() - (average_moles / DECOMP_REMOVE_RATIO)).abs());
+			m.clear_vol(m.total_moles() - (average_moles / DECOMP_REMOVE_RATIO));
 		} else {
 			m.clear_air();
 		}
