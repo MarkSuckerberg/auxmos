@@ -6,6 +6,8 @@ use super::*;
 
 use crate::GasArena;
 
+use ahash::RandomState;
+
 use std::time::{Duration, Instant};
 
 use auxcallback::{byond_callback_sender, process_callbacks_for_millis};
@@ -567,7 +569,7 @@ static mut PLANET_RESET_TIMER: Option<Instant> = None;
 // If this turf has planetary atmos, and it's sufficiently similar, just sets the turf's atmos to the planetary atmos.
 fn remove_trace_planet_gases(
 	m: TurfMixture,
-	planetary_atmos: &'static DashMap<u32, Mixture, FxBuildHasher>,
+	planetary_atmos: &'static DashMap<u32, Mixture, RandomState>,
 	all_mixtures: &[RwLock<Mixture>],
 ) {
 	if let Some(planet_atmos_entry) = m.planetary_atmos.and_then(|id| planetary_atmos.get(&id)) {

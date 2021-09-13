@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use fxhash::FxBuildHasher;
+use ahash::RandomState;
 
 use std::cell::RefCell;
 
@@ -199,7 +199,7 @@ impl GasType {
 	}
 }
 
-static mut GAS_INFO_BY_STRING: Option<DashMap<Box<str>, GasType, FxBuildHasher>> = None;
+static mut GAS_INFO_BY_STRING: Option<DashMap<Box<str>, GasType, RandomState>> = None;
 
 static GAS_INFO_BY_IDX: RwLock<Option<Vec<GasType>>> = const_rwlock(None);
 
@@ -208,7 +208,7 @@ static GAS_SPECIFIC_HEATS: RwLock<Option<Vec<f32>>> = const_rwlock(None);
 #[init(partial)]
 fn _create_gas_info_structs() -> Result<(), String> {
 	unsafe {
-		GAS_INFO_BY_STRING = Some(DashMap::with_hasher(FxBuildHasher::default()));
+		GAS_INFO_BY_STRING = Some(DashMap::with_hasher(RandomState::default()));
 	};
 	*GAS_INFO_BY_IDX.write() = Some(Vec::new());
 	*GAS_SPECIFIC_HEATS.write() = Some(Vec::new());
@@ -367,7 +367,7 @@ fn _finalize_gas_refs() {
 }
 
 thread_local! {
-	static CACHED_GAS_IDS: RefCell<HashMap<Value, GasIDX, FxBuildHasher>> = RefCell::new(HashMap::with_hasher(FxBuildHasher::default()));
+	static CACHED_GAS_IDS: RefCell<HashMap<Value, GasIDX, RandomState>> = RefCell::new(HashMap::with_hasher(RandomState::default()));
 }
 
 /// Returns the appropriate index to be used by auxmos for a given ID string.
