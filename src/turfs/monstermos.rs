@@ -4,6 +4,9 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use indexmap::IndexSet;
 
+use ahash::RandomState;
+use fxhash::FxBuildHasher;
+
 use auxcallback::byond_callback_sender;
 
 use std::cell::Cell;
@@ -69,7 +72,7 @@ mod tests {
 fn finalize_eq(
 	i: TurfID,
 	turf: &TurfMixture,
-	info: &HashMap<TurfID, Cell<MonstermosInfo>>,
+	info: &HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	max_x: i32,
 	max_y: i32,
 ) {
@@ -154,7 +157,7 @@ fn finalize_eq_neighbors(
 	i: TurfID,
 	turf: &TurfMixture,
 	transfer_dirs: [f32; 7],
-	info: &HashMap<TurfID, Cell<MonstermosInfo>>,
+	info: &HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	max_x: i32,
 	max_y: i32,
 ) {
@@ -172,13 +175,15 @@ fn finalize_eq_neighbors(
 fn explosively_depressurize(
 	turf_idx: TurfID,
 	turf: TurfMixture,
-	mut info: HashMap<TurfID, Cell<MonstermosInfo>>,
+	mut info: HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	equalize_hard_turf_limit: usize,
 	max_x: i32,
 	max_y: i32,
 ) -> DMResult {
-	let mut turfs: IndexSet<MixWithID> = IndexSet::new();
-	let mut progression_order: IndexSet<MixWithID> = IndexSet::new();
+	let mut turfs: IndexSet<MixWithID, RandomState>
+		= IndexSet::with_hasher(RandomState::default());
+	let mut progression_order: IndexSet<TurfID, RandomState>
+		= IndexSet::with_hasher(RandomState::default());
 	turfs.insert((turf_idx, turf));
 	let cur_orig = info.entry(turf_idx).or_default();
 	let mut cur_info: MonstermosInfo = Default::default();
@@ -198,7 +203,7 @@ fn explosively_depressurize(
 			continue;
 		}
 		if m.is_immutable() {
-			if progression_order.insert((i, m)) {
+			if progression_order.insert(i) {
 				unsafe { Value::turf_by_id_unchecked(i) }
 					.set(byond_string!("pressure_specific_target"), &unsafe {
 						Value::turf_by_id_unchecked(i)
@@ -214,7 +219,8 @@ fn explosively_depressurize(
 					insert_success = turfs.insert((loc, *adj_m))
 				};
 				if insert_success {
-					if firelock_turfs().contains_key(&loc) {
+					if firelock_turfs().contains_key(&loc)
+						|| firelock_turfs().contains_key(&i) {
 						unsafe { Value::turf_by_id_unchecked(i) }.call(
 							"consider_firelocks",
 							&[&unsafe { Value::turf_by_id_unchecked(loc) }],
@@ -228,7 +234,7 @@ fn explosively_depressurize(
 			return Ok(Value::null()); // planet atmos > space
 		}
 	}
-	for (i, _) in progression_order.iter() {
+	for i in progression_order.iter() {
 		let cur_info = info.entry(*i).or_default().get_mut();
 		cur_info.curr_transfer_dir = 6;
 	}
@@ -236,17 +242,23 @@ fn explosively_depressurize(
 	let mut space_turf_len = 0;
 	let mut total_moles = 0_f64;
 	while cur_queue_idx < progression_order.len() {
-		let (i, m) = progression_order[cur_queue_idx];
+		let i = progression_order[cur_queue_idx];
 		cur_queue_idx += 1;
 		if cur_queue_idx > equalize_hard_turf_limit {
 			continue;
 		}
+		let maybe_m = turf_gases().get(&i);
+		if maybe_m.is_none() {
+			info.entry(i).or_default().take();
+			continue;
+		}
+		let m = *maybe_m.unwrap();
 		for (j, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
 			if let Some(adj_m) = { turf_gases().get(&loc) } {
 				let adj_orig = info.entry(loc).or_default();
 				let mut adj_info = adj_orig.get();
 				if !adj_m.is_immutable() {
-					if progression_order.insert((loc, *adj_m)) {
+					if progression_order.insert(loc) {
 						total_moles += adj_m.total_moles() as f64;
 						adj_info.curr_transfer_dir = OPP_DIR_INDEX[j as usize];
 						adj_info.curr_transfer_amount = 0.0;
@@ -280,7 +292,12 @@ fn explosively_depressurize(
 				std::column!()
 			)
 		})?;
-	for (i, m) in progression_order.iter().rev() {
+	for i in progression_order.iter().rev() {
+		let maybe_m = turf_gases().get(&i);
+		if maybe_m.is_none() {
+			continue;
+		}
+		let m = *maybe_m.unwrap();
 		let cur_orig = info.entry(*i).or_default();
 		let mut cur_info = cur_orig.get();
 		if cur_info.curr_transfer_dir == 6 {
@@ -338,7 +355,7 @@ fn explosively_depressurize(
 		}
 
 		if slowable == true {
-			m.clear_vol(m.total_moles() - (average_moles / DECOMP_REMOVE_RATIO));
+			m.clear_vol(average_moles / DECOMP_REMOVE_RATIO);
 		} else {
 			m.clear_air();
 		}
@@ -357,13 +374,19 @@ fn flood_fill_equalize_turfs(
 	equalize_hard_turf_limit: usize,
 	max_x: i32,
 	max_y: i32,
-	found_turfs: &mut HashSet<TurfID>,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
-) -> Option<(IndexSet<MixWithID>, IndexSet<MixWithID>, f64)> {
-	let mut turfs: IndexSet<MixWithID> = IndexSet::with_capacity(equalize_hard_turf_limit);
+	found_turfs: &mut HashSet<TurfID, FxBuildHasher>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
+) -> Option<(
+	IndexSet<MixWithID, RandomState>,
+	IndexSet<MixWithID, RandomState>, f64
+	)>
+{
+	let mut turfs: IndexSet<MixWithID, RandomState>
+		= IndexSet::with_capacity_and_hasher(equalize_hard_turf_limit, RandomState::default());
 	let mut border_turfs: std::collections::VecDeque<MixWithID>
 		= std::collections::VecDeque::with_capacity(equalize_hard_turf_limit);
-	let mut planet_turfs: IndexSet<MixWithID> = IndexSet::new();
+	let mut planet_turfs: IndexSet<MixWithID, RandomState>
+		= IndexSet::with_hasher(RandomState::default());
 	#[cfg(feature = "explosive_decompression")]
 	let sender = byond_callback_sender();
 	let mut total_moles = 0.0_f64;
@@ -399,12 +422,12 @@ fn flood_fill_equalize_turfs(
 								let fake_cloned = info
 									.iter()
 									.map(|(&k, v)| (k, v.get()))
-									.collect::<HashMap<TurfID, MonstermosInfo>>();
+									.collect::<HashMap<TurfID, MonstermosInfo, FxBuildHasher>>();
 								let _ = sender.send(Box::new(move || {
 									let cloned = fake_cloned
 										.iter()
 										.map(|(&k, &v)| (k, Cell::new(v)))
-										.collect::<HashMap<TurfID, Cell<MonstermosInfo>>>();
+										.collect::<HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>>();
 									explosively_depressurize(
 										i,
 										m,
@@ -446,7 +469,7 @@ fn monstermos_fast_process(
 	m: TurfMixture,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 ) {
 	let maybe_cur_orig = info.get(&i);
 	if maybe_cur_orig.is_none() {
@@ -490,7 +513,7 @@ fn give_to_takers(
 	taker_turfs: &Vec<MixWithID>,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	queue_cycle_slow: &mut i32,
 ) {
 	let mut queue: Vec<MixWithID> = Vec::with_capacity(taker_turfs.len());
@@ -580,7 +603,7 @@ fn take_from_givers(
 	giver_turfs: &Vec<MixWithID>,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	queue_cycle_slow: &mut i32,
 ) {
 	let mut queue: Vec<MixWithID> = Vec::with_capacity(giver_turfs.len());
@@ -666,11 +689,11 @@ fn take_from_givers(
 }
 
 fn process_planet_turfs(
-	planet_turfs: &IndexSet<MixWithID>,
+	planet_turfs: &IndexSet<MixWithID, RandomState>,
 	average_moles: f32,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	mut queue_cycle_slow: i32,
 ) -> DMResult {
 	let (_, sample_turf) = planet_turfs[0];
@@ -685,9 +708,9 @@ fn process_planet_turfs(
 		.total_moles();
 	let target_delta = planet_sum - average_moles;
 	queue_cycle_slow += 1;
-	let mut progression_order: Vec<MixWithID> = Vec::with_capacity(planet_turfs.len());
-	for (i, m) in planet_turfs.iter() {
-		progression_order.push((*i, *m));
+	let mut progression_order: Vec<TurfID> = Vec::with_capacity(planet_turfs.len());
+	for (i, _) in planet_turfs.iter() {
+		progression_order.push(*i);
 		let mut cur_info = info.entry(*i).or_default().get_mut();
 		cur_info.curr_transfer_dir = 6;
 		cur_info.last_slow_queue_cycle = queue_cycle_slow;
@@ -695,11 +718,18 @@ fn process_planet_turfs(
 	// now build a map of where the path to a planet turf is for each tile.
 	let mut queue_idx = 0;
 	while queue_idx < progression_order.len() {
-		let (i, m) = progression_order[queue_idx];
+		let i = progression_order[queue_idx];
+		let maybe_m = turf_gases().get(&i);
+		if maybe_m.is_none() {
+			info.entry(i).or_default().take();
+			continue;
+		}
+		let m = *maybe_m.unwrap();
 		for (j, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
 			if let Some(adj_orig) = info.get(&loc) {
 				let mut adj_info = adj_orig.get();
-				if firelock_turfs().contains_key(&loc) {
+				if firelock_turfs().contains_key(&loc)
+					|| firelock_turfs().contains_key(&i) {
 					unsafe { Value::turf_by_id_unchecked(i) }.call(
 						"consider_firelocks",
 						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
@@ -714,13 +744,16 @@ fn process_planet_turfs(
 					adj_info.last_slow_queue_cycle = queue_cycle_slow;
 					adj_info.curr_transfer_dir = OPP_DIR_INDEX[j as usize];
 					adj_orig.set(adj_info);
-					progression_order.push((*adj.key(), *adj.value()));
+					progression_order.push(*adj.key());
 				}
 			}
 		}
 		queue_idx += 1;
 	}
-	for (i, _) in progression_order.iter().rev() {
+	for i in progression_order.iter().rev() {
+		if turf_gases().get(&i).is_none() {
+			continue;
+		}
 		if let Some(cur_orig) = info.get(i) {
 			let mut cur_info = cur_orig.get();
 			let airflow = cur_info.mole_delta - target_delta;
@@ -751,10 +784,12 @@ pub(crate) fn equalize(
 	max_y: i32,
 	high_pressure_turfs: BTreeSet<TurfID>,
 ) -> usize {
-	let mut info: HashMap<TurfID, Cell<MonstermosInfo>> = HashMap::new();
+	let mut info: HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>
+		= HashMap::with_hasher(FxBuildHasher::default());
 	let mut turfs_processed = 0;
 	let mut queue_cycle_slow = 1;
-	let mut found_turfs: HashSet<TurfID> = HashSet::new();
+	let mut found_turfs: HashSet<TurfID, FxBuildHasher>
+		= HashSet::with_hasher(FxBuildHasher::default());
 	for &i in high_pressure_turfs.iter() {
 		if found_turfs.contains(&i)
 			|| turf_gases().get(&i).map_or(true, |m| {
@@ -874,12 +909,12 @@ pub(crate) fn equalize(
 			let fake_cloned = info
 				.iter()
 				.map(|(&k, v)| (k, v.get()))
-				.collect::<HashMap<TurfID, MonstermosInfo>>();
+				.collect::<HashMap<TurfID, MonstermosInfo, FxBuildHasher>>();
 			let _ = sender.send(Box::new(move || {
 				let mut cloned = fake_cloned
 					.iter()
 					.map(|(&k, &v)| (k, Cell::new(v)))
-					.collect::<HashMap<TurfID, Cell<MonstermosInfo>>>();
+					.collect::<HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>>();
 				process_planet_turfs(
 					&planet_turfs,
 					average_moles,
