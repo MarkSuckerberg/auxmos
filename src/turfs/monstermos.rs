@@ -5,6 +5,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use indexmap::IndexSet;
 
 use ahash::RandomState;
+use fxhash::FxBuildHasher;
 
 use auxcallback::byond_callback_sender;
 
@@ -71,7 +72,7 @@ mod tests {
 fn finalize_eq(
 	i: TurfID,
 	turf: &TurfMixture,
-	info: &HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	info: &HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	max_x: i32,
 	max_y: i32,
 ) {
@@ -156,7 +157,7 @@ fn finalize_eq_neighbors(
 	i: TurfID,
 	turf: &TurfMixture,
 	transfer_dirs: [f32; 7],
-	info: &HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	info: &HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	max_x: i32,
 	max_y: i32,
 ) {
@@ -174,7 +175,7 @@ fn finalize_eq_neighbors(
 fn explosively_depressurize(
 	turf_idx: TurfID,
 	turf: TurfMixture,
-	mut info: HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	mut info: HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	equalize_hard_turf_limit: usize,
 	max_x: i32,
 	max_y: i32,
@@ -373,8 +374,8 @@ fn flood_fill_equalize_turfs(
 	equalize_hard_turf_limit: usize,
 	max_x: i32,
 	max_y: i32,
-	found_turfs: &mut HashSet<TurfID, RandomState>,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	found_turfs: &mut HashSet<TurfID, FxBuildHasher>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 ) -> Option<(
 	IndexSet<MixWithID, RandomState>,
 	IndexSet<MixWithID, RandomState>, f64
@@ -421,12 +422,12 @@ fn flood_fill_equalize_turfs(
 								let fake_cloned = info
 									.iter()
 									.map(|(&k, v)| (k, v.get()))
-									.collect::<HashMap<TurfID, MonstermosInfo, RandomState>>();
+									.collect::<HashMap<TurfID, MonstermosInfo, FxBuildHasher>>();
 								let _ = sender.send(Box::new(move || {
 									let cloned = fake_cloned
 										.iter()
 										.map(|(&k, &v)| (k, Cell::new(v)))
-										.collect::<HashMap<TurfID, Cell<MonstermosInfo>, RandomState>>();
+										.collect::<HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>>();
 									explosively_depressurize(
 										i,
 										m,
@@ -468,7 +469,7 @@ fn monstermos_fast_process(
 	m: TurfMixture,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 ) {
 	let maybe_cur_orig = info.get(&i);
 	if maybe_cur_orig.is_none() {
@@ -512,7 +513,7 @@ fn give_to_takers(
 	taker_turfs: &Vec<MixWithID>,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	queue_cycle_slow: &mut i32,
 ) {
 	let mut queue: Vec<MixWithID> = Vec::with_capacity(taker_turfs.len());
@@ -602,7 +603,7 @@ fn take_from_givers(
 	giver_turfs: &Vec<MixWithID>,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	queue_cycle_slow: &mut i32,
 ) {
 	let mut queue: Vec<MixWithID> = Vec::with_capacity(giver_turfs.len());
@@ -692,7 +693,7 @@ fn process_planet_turfs(
 	average_moles: f32,
 	max_x: i32,
 	max_y: i32,
-	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, RandomState>,
+	info: &mut HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>,
 	mut queue_cycle_slow: i32,
 ) -> DMResult {
 	let (_, sample_turf) = planet_turfs[0];
@@ -783,12 +784,12 @@ pub(crate) fn equalize(
 	max_y: i32,
 	high_pressure_turfs: BTreeSet<TurfID>,
 ) -> usize {
-	let mut info: HashMap<TurfID, Cell<MonstermosInfo>, RandomState>
-		= HashMap::with_hasher(RandomState::default());
+	let mut info: HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>
+		= HashMap::with_hasher(FxBuildHasher::default());
 	let mut turfs_processed = 0;
 	let mut queue_cycle_slow = 1;
-	let mut found_turfs: HashSet<TurfID, RandomState>
-		= HashSet::with_hasher(RandomState::default());
+	let mut found_turfs: HashSet<TurfID, FxBuildHasher>
+		= HashSet::with_hasher(FxBuildHasher::default());
 	for &i in high_pressure_turfs.iter() {
 		if found_turfs.contains(&i)
 			|| turf_gases().get(&i).map_or(true, |m| {
@@ -908,12 +909,12 @@ pub(crate) fn equalize(
 			let fake_cloned = info
 				.iter()
 				.map(|(&k, v)| (k, v.get()))
-				.collect::<HashMap<TurfID, MonstermosInfo, RandomState>>();
+				.collect::<HashMap<TurfID, MonstermosInfo, FxBuildHasher>>();
 			let _ = sender.send(Box::new(move || {
 				let mut cloned = fake_cloned
 					.iter()
 					.map(|(&k, &v)| (k, Cell::new(v)))
-					.collect::<HashMap<TurfID, Cell<MonstermosInfo>, RandomState>>();
+					.collect::<HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>>();
 				process_planet_turfs(
 					&planet_turfs,
 					average_moles,

@@ -16,7 +16,7 @@ use crate::GasArena;
 
 use dashmap::DashMap;
 
-use ahash::RandomState;
+use fxhash::FxBuildHasher;
 
 use rayon;
 
@@ -152,24 +152,24 @@ struct ThermalInfo {
 }
 
 // All the turfs that have gas mixtures.
-static mut TURF_GASES: Option<DashMap<TurfID, TurfMixture, RandomState>> = None;
+static mut TURF_GASES: Option<DashMap<TurfID, TurfMixture, FxBuildHasher>> = None;
 // Turfs with temperatures/heat capacities. This is distinct from the above.
-static mut TURF_TEMPERATURES: Option<DashMap<TurfID, ThermalInfo, RandomState>> = None;
+static mut TURF_TEMPERATURES: Option<DashMap<TurfID, ThermalInfo, FxBuildHasher>> = None;
 // We store planetary atmos by hash of the initial atmos string here for speed.
-static mut PLANETARY_ATMOS: Option<DashMap<u32, Mixture, RandomState>> = None;
+static mut PLANETARY_ATMOS: Option<DashMap<u32, Mixture, FxBuildHasher>> = None;
 // Turfs with firelocks are stored for explosive decompression speed
 #[cfg(feature = "explosive_decompression")]
-static mut FIRELOCK_TURFS: Option<DashMap<TurfID, (), RandomState>> = None;
+static mut FIRELOCK_TURFS: Option<DashMap<TurfID, (), FxBuildHasher>> = None;
 
 #[init(partial)]
 fn _initialize_turf_statics() -> Result<(), String> {
 	unsafe {
-		TURF_GASES = Some(DashMap::with_hasher(RandomState::default()));
-		TURF_TEMPERATURES = Some(DashMap::with_hasher(RandomState::default()));
-		PLANETARY_ATMOS = Some(DashMap::with_hasher(RandomState::default()));
+		TURF_GASES = Some(DashMap::with_hasher(FxBuildHasher::default()));
+		TURF_TEMPERATURES = Some(DashMap::with_hasher(FxBuildHasher::default()));
+		PLANETARY_ATMOS = Some(DashMap::with_hasher(FxBuildHasher::default()));
 		#[cfg(feature = "explosive_decompression")]
 		{
-			FIRELOCK_TURFS = Some(DashMap::with_hasher(RandomState::default()));
+			FIRELOCK_TURFS = Some(DashMap::with_hasher(FxBuildHasher::default()));
 		}
 	};
 	Ok(())
@@ -188,20 +188,20 @@ fn _shutdown_turfs() {
 	};
 }
 // this would lead to undefined info if it were possible for something to put a None on it during operation, but nothing's going to do that
-fn turf_gases() -> &'static DashMap<TurfID, TurfMixture, RandomState> {
+fn turf_gases() -> &'static DashMap<TurfID, TurfMixture, FxBuildHasher> {
 	unsafe { TURF_GASES.as_ref().unwrap() }
 }
 
-fn planetary_atmos() -> &'static DashMap<u32, Mixture, RandomState> {
+fn planetary_atmos() -> &'static DashMap<u32, Mixture, FxBuildHasher> {
 	unsafe { PLANETARY_ATMOS.as_ref().unwrap() }
 }
 
-fn turf_temperatures() -> &'static DashMap<TurfID, ThermalInfo, RandomState> {
+fn turf_temperatures() -> &'static DashMap<TurfID, ThermalInfo, FxBuildHasher> {
 	unsafe { TURF_TEMPERATURES.as_ref().unwrap() }
 }
 
 #[cfg(feature = "explosive_decompression")]
-fn firelock_turfs() -> &'static DashMap<TurfID, (), RandomState> {
+fn firelock_turfs() -> &'static DashMap<TurfID, (), FxBuildHasher> {
 	unsafe { FIRELOCK_TURFS.as_ref().unwrap() }
 }
 

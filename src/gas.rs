@@ -4,7 +4,7 @@ pub mod types;
 
 use auxtools::*;
 
-use ahash::RandomState;
+use fxhash::FxBuildHasher;
 
 use std::collections::HashSet;
 
@@ -29,7 +29,7 @@ static GAS_MIXTURES: RwLock<Option<Vec<RwLock<Mixture>>>> = const_rwlock(None);
 
 static NEXT_GAS_IDS: RwLock<Option<Vec<usize>>> = const_rwlock(None);
 
-static mut REGISTERED_GAS_MIXES: Option<HashSet<u32, RandomState>> = None;
+static mut REGISTERED_GAS_MIXES: Option<HashSet<u32, FxBuildHasher>> = None;
 
 fn is_registered_mix(i: u32) -> bool {
 	unsafe {
@@ -42,7 +42,7 @@ fn is_registered_mix(i: u32) -> bool {
 fn register_mix(v: &Value) {
 	unsafe {
 		REGISTERED_GAS_MIXES
-			.get_or_insert_with(|| HashSet::with_hasher(RandomState::default()))
+			.get_or_insert_with(|| HashSet::with_hasher(FxBuildHasher::default()))
 			.insert(v.raw.data.id);
 	}
 }
@@ -50,7 +50,7 @@ fn register_mix(v: &Value) {
 fn unregister_mix(i: u32) {
 	unsafe {
 		REGISTERED_GAS_MIXES
-			.get_or_insert_with(|| HashSet::with_hasher(RandomState::default()))
+			.get_or_insert_with(|| HashSet::with_hasher(FxBuildHasher::default()))
 			.remove(&i);
 	}
 }
@@ -68,7 +68,7 @@ fn _shut_down_gases() {
 	*NEXT_GAS_IDS.write() = None;
 	unsafe {
 		REGISTERED_GAS_MIXES
-			.get_or_insert_with(|| HashSet::with_hasher(RandomState::default()))
+			.get_or_insert_with(|| HashSet::with_hasher(FxBuildHasher::default()))
 			.clear();
 	}
 }
