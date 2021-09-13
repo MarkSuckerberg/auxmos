@@ -6,8 +6,6 @@ use super::*;
 
 use crate::GasArena;
 
-use fxhash::FxBuildHasher;
-
 use std::time::{Duration, Instant};
 
 use auxcallback::{byond_callback_sender, process_callbacks_for_millis};
