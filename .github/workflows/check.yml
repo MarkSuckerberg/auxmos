@@ -16,4 +16,17 @@ jobs:
           sudo apt update
           sudo apt install g++-multilib -y
       - name: Check auxmos build
-        run: cargo check --target=i686-unknown-linux-gnu --release --features trit_fire_hook,plasma_fire_hook,generic_fire_hook,xenomedes_fusion,explosive_decompression
+        run: cargo check --target=i686-unknown-linux-gnu --release --features bee_features
+  windows-build:
+	runs-on: windows-latest
+	steps:
+      - uses: actions/checkout@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: i686-pc-windows-msvc
+      - name: Check auxmos build
+        uses: actions-rs/cargo@v1
+        with:
+          run: cargo check --target i686-pc-windows-msvc --release --features bee_features
+

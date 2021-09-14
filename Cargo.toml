@@ -19,6 +19,7 @@ fusion_hook = ["reaction_hooks"]
 xenomedes_fusion = []
 generic_fire_hook = ["reaction_hooks"]
 all_reaction_hooks = ["fusion_hook", "trit_fire_hook", "plasma_fire_hook", "generic_fire_hook"]
+bee_features = ["trit_fire_hook", "plasma_fire_hook", "generic_fire_hook", "xenomedes_fusion", "explosive_decompression"]
 explosive_decompression = ["monstermos"]
 putnamos_decompression = ["putnamos"]
 
