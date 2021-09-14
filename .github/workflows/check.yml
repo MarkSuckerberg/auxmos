@@ -18,8 +18,8 @@ jobs:
       - name: Check auxmos build
         run: cargo check --target=i686-unknown-linux-gnu --release --features bee_features
   windows-build:
-	runs-on: windows-latest
-	steps:
+    runs-on: windows-latest
+    steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
