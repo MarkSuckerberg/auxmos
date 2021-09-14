@@ -292,6 +292,8 @@ fn explosively_depressurize(
 				std::column!()
 			)
 		})?;
+	use rand::{thread_rng, Rng};
+	let mut rng = thread_rng();
 	for i in progression_order.iter().rev() {
 		let maybe_m = turf_gases().get(&i);
 		if maybe_m.is_none() {
@@ -360,7 +362,11 @@ fn explosively_depressurize(
 			m.clear_air();
 		}
 
-		byond_turf.call("handle_decompression_floor_rip", &[&Value::from(sum)])?;
+		if sum > 20_f32 {
+			if rng.gen_bool(((sum as f64 / 20_f64) / 100_f64).clamp(0_f64 , 0.05_f64)) {
+				byond_turf.call("handle_decompression_floor_rip", &[])?;
+			}
+		}
 	}
 	Ok(Value::null())
 	//	if (total_gases_deleted / turfs.len() as f32) > 20.0 && turfs.len() > 10 { // logging I guess
