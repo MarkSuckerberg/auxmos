@@ -128,7 +128,7 @@ fn _process_turf_hook() {
 			let sender = byond_callback_sender();
 			let (low_pressure_turfs, high_pressure_turfs) = {
 				let start_time = Instant::now();
-				let (low_pressure_turfs, high_pressure_turfs) = fdm(max_x, max_y, fdm_max_steps);
+				let (low_pressure_turfs, high_pressure_turfs) = fdm(max_x, max_y, fdm_max_steps, equalize_enabled);
 				let bench = start_time.elapsed().as_millis();
 				let (lpt, hpt) = (low_pressure_turfs.len(), high_pressure_turfs.len());
 				let _ = sender.try_send(Box::new(move || {
@@ -360,7 +360,7 @@ fn process_cell(
 }
 
 // Solving the heat equation using a Finite Difference Method, an iterative stencil loop.
-fn fdm(max_x: i32, max_y: i32, fdm_max_steps: i32) -> (BTreeSet<TurfID>, BTreeSet<TurfID>) {
+fn fdm(max_x: i32, max_y: i32, fdm_max_steps: i32, equalize_enabled: bool) -> (BTreeSet<TurfID>, BTreeSet<TurfID>) {
 	/*
 		This is the replacement system for LINDA. LINDA requires a lot of bookkeeping,
 		which, when coefficient-wise operations are this fast, is all just unnecessary overhead.
@@ -450,38 +450,40 @@ fn fdm(max_x: i32, max_y: i32, fdm_max_steps: i32) -> (BTreeSet<TurfID>, BTreeSe
 					})
 				})
 				.partition(|&(_, _, max_diff)| max_diff <= 5.0);
-			let pressure_deltas_chunked = high_pressure.par_chunks(20).collect::<Vec<_>>();
-			pressure_deltas_chunked
-				.par_iter()
-				.with_min_len(5)
-				.for_each(|temp_value| {
-					let sender = byond_callback_sender();
-					let these_pressure_deltas = temp_value.iter().copied().collect::<Vec<_>>();
-					let _ = sender.try_send(Box::new(move || {
-						for &(turf_id, pressure_diffs, _) in
-							these_pressure_deltas.iter().filter(|&(id, _, _)| *id != 0)
-						{
-							let turf = unsafe { Value::turf_by_id_unchecked(turf_id) };
-							for &(id, diff) in &pressure_diffs {
-								if id != 0 {
-									let enemy_tile = unsafe { Value::turf_by_id_unchecked(id) };
-									if diff > 5.0 {
-										turf.call(
-											"consider_pressure_difference",
-											&[&enemy_tile, &Value::from(diff)],
-										)?;
-									} else if diff < -5.0 {
-										enemy_tile.call(
-											"consider_pressure_difference",
-											&[&turf.clone(), &Value::from(-diff)],
-										)?;
+			if !equalize_enabled {
+				let pressure_deltas_chunked = high_pressure.par_chunks(20).collect::<Vec<_>>();
+				pressure_deltas_chunked
+					.par_iter()
+					.with_min_len(5)
+					.for_each(|temp_value| {
+						let sender = byond_callback_sender();
+						let these_pressure_deltas = temp_value.iter().copied().collect::<Vec<_>>();
+						let _ = sender.try_send(Box::new(move || {
+							for &(turf_id, pressure_diffs, _) in
+								these_pressure_deltas.iter().filter(|&(id, _, _)| *id != 0)
+							{
+								let turf = unsafe { Value::turf_by_id_unchecked(turf_id) };
+								for &(id, diff) in &pressure_diffs {
+									if id != 0 {
+										let enemy_tile = unsafe { Value::turf_by_id_unchecked(id) };
+										if diff > 5.0 {
+											turf.call(
+												"consider_pressure_difference",
+												&[&enemy_tile, &Value::from(diff)],
+											)?;
+										} else if diff < -5.0 {
+											enemy_tile.call(
+												"consider_pressure_difference",
+												&[&turf.clone(), &Value::from(-diff)],
+											)?;
+										}
 									}
 								}
 							}
-						}
-						Ok(Value::null())
-					}));
-				});
+							Ok(Value::null())
+						}));
+					});
+			}
 			high_pressure_turfs.extend(high_pressure.iter().map(|(i, _, _)| i));
 			low_pressure_turfs.extend(low_pressure.iter().map(|(i, _, _)| i));
 		});

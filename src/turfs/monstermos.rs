@@ -135,7 +135,7 @@ fn finalize_eq(
 					}
 					adj_orig.set(adj_info);
 					let _ = sender.send(Box::new(move || {
-						let real_amount = Value::from(-amount);
+						let real_amount = Value::from(amount);
 						let turf = unsafe { Value::turf_by_id_unchecked(i as u32) };
 						let other_turf = unsafe { Value::turf_by_id_unchecked(adj_id as u32) };
 						if let Err(e) =
