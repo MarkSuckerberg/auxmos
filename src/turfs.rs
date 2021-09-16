@@ -127,6 +127,27 @@ impl TurfMixture {
 				.remove(amt)
 		});
 	}
+
+	pub fn return_volume(&self) -> f32 {
+		GasArena::with_all_mixtures(|all_mixtures| {
+			all_mixtures
+				.get(self.mix)
+				.unwrap_or_else(|| panic!("Gas mixture not found for turf: {}", self.mix))
+				.read()
+				.volume
+		})
+	}
+
+	pub fn return_temperature(&self) -> f32 {
+		GasArena::with_all_mixtures(|all_mixtures| {
+			all_mixtures
+				.get(self.mix)
+				.unwrap_or_else(|| panic!("Gas mixture not found for turf: {}", self.mix))
+				.read()
+				.get_temperature()
+		})
+	}
+
 	pub fn get_gas_copy(&self) -> Mixture {
 		let mut ret: Mixture = Mixture::new();
 		GasArena::with_all_mixtures(|all_mixtures| {

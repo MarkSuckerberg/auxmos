@@ -208,7 +208,7 @@ fn _process_turf_hook() {
 							equalize_hard_turf_limit,
 							max_x,
 							max_y,
-							high_pressure_turfs,
+							&high_pressure_turfs
 						)
 					}
 					#[cfg(not(feature = "equalization"))]

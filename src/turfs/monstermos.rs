@@ -115,6 +115,8 @@ fn finalize_eq(
 	}
 	for (j, adj_id) in adjacent_tile_ids(turf.adjacency, i, max_x, max_y) {
 		let amount = transfer_dirs[j as usize];
+		let temp = turf.return_temperature();
+		let vol = turf.return_volume();
 		if amount > 0.0 {
 			if turf.total_moles() < amount {
 				finalize_eq_neighbors(i, turf, transfer_dirs, info, max_x, max_y);
@@ -135,7 +137,7 @@ fn finalize_eq(
 					}
 					adj_orig.set(adj_info);
 					let _ = sender.send(Box::new(move || {
-						let real_amount = Value::from(amount);
+						let real_amount = Value::from(amount * R_IDEAL_GAS_EQUATION * temp / vol);
 						let turf = unsafe { Value::turf_by_id_unchecked(i as u32) };
 						let other_turf = unsafe { Value::turf_by_id_unchecked(adj_id as u32) };
 						if let Err(e) =
@@ -215,18 +217,32 @@ fn explosively_depressurize(
 			}
 			for (_, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
 				let mut insert_success = false;
-				if let Some(adj_m) = turf_gases().get(&loc) {
-					insert_success = turfs.insert((loc, *adj_m))
-				};
-				if insert_success {
-					if firelock_turfs().contains_key(&loc)
-						|| firelock_turfs().contains_key(&i) {
-						unsafe { Value::turf_by_id_unchecked(i) }.call(
-							"consider_firelocks",
-							&[&unsafe { Value::turf_by_id_unchecked(loc) }],
-						)?;
+
+				if firelock_turfs().contains_key(&loc) {
+					unsafe { Value::turf_by_id_unchecked(i) }.call(
+						"consider_firelocks",
+						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
+					)?;
+					if let Some(adj_m) = turf_gases().get(&loc) {
+						insert_success = turfs.insert((loc, *adj_m))
+					};
+					if insert_success {
+						info.entry(loc).or_default().take();
 					}
-					info.entry(loc).or_default().take();
+					continue;
+				} else if firelock_turfs().contains_key(&i) {
+					unsafe { Value::turf_by_id_unchecked(i) }.call(
+						"consider_firelocks",
+						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
+					)?;
+					continue;
+				} else {
+					if let Some(adj_m) = turf_gases().get(&loc) {
+						insert_success = turfs.insert((loc, *adj_m))
+					};
+					if insert_success {
+						info.entry(loc).or_default().take();
+					}
 				}
 			}
 		}
@@ -305,6 +321,13 @@ fn explosively_depressurize(
 		if cur_info.curr_transfer_dir == 6 {
 			continue;
 		}
+		let loc = adjacent_tile_id(cur_info.curr_transfer_dir as u8, *i, max_x, max_y);
+		let maybe_adj_m = turf_gases().get(&loc);
+		if maybe_adj_m.is_none() {
+			continue;
+		}
+		let adj_m = *maybe_adj_m.unwrap();
+
 		let mut in_hpd = false;
 		for k in 1..=hpd.len() {
 			if let Ok(hpd_val) = hpd.get(k) {
@@ -317,12 +340,14 @@ fn explosively_depressurize(
 		if !in_hpd {
 			hpd.append(&unsafe { Value::turf_by_id_unchecked(*i) });
 		}
-		let loc = adjacent_tile_id(cur_info.curr_transfer_dir as u8, *i, max_x, max_y);
-		let mut sum = 0.0_f32;
 
-		if let Some(adj_m) = turf_gases().get(&loc) {
-			sum = adj_m.total_moles();
-		};
+		let sum = adj_m.total_moles();
+
+		let cur_temp = m.return_temperature();
+		let cur_vol = m.return_volume();
+
+		let adj_temp = adj_m.return_temperature();
+		let adj_vol = adj_m.return_volume();
 
 		cur_info.curr_transfer_amount += sum;
 		cur_orig.set(cur_info);
@@ -337,7 +362,8 @@ fn explosively_depressurize(
 
 		byond_turf.set(
 			byond_string!("pressure_difference"),
-			Value::from(cur_info.curr_transfer_amount),
+			Value::from(cur_info.curr_transfer_amount
+				* R_IDEAL_GAS_EQUATION * cur_temp / cur_vol),
 		)?;
 		byond_turf.set(
 			byond_string!("pressure_direction"),
@@ -348,7 +374,8 @@ fn explosively_depressurize(
 			let byond_turf_adj = unsafe { Value::turf_by_id_unchecked(loc) };
 			byond_turf_adj.set(
 				byond_string!("pressure_difference"),
-				Value::from(adj_info.curr_transfer_amount),
+				Value::from(adj_info.curr_transfer_amount
+					* R_IDEAL_GAS_EQUATION * adj_temp / adj_vol),
 			)?;
 			byond_turf_adj.set(
 				byond_string!("pressure_direction"),
@@ -788,7 +815,7 @@ pub(crate) fn equalize(
 	equalize_hard_turf_limit: usize,
 	max_x: i32,
 	max_y: i32,
-	high_pressure_turfs: BTreeSet<TurfID>,
+	high_pressure_turfs: &BTreeSet<TurfID>,
 ) -> usize {
 	let mut info: HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>
 		= HashMap::with_hasher(FxBuildHasher::default());
@@ -796,7 +823,7 @@ pub(crate) fn equalize(
 	let mut queue_cycle_slow = 1;
 	let mut found_turfs: HashSet<TurfID, FxBuildHasher>
 		= HashSet::with_hasher(FxBuildHasher::default());
-	for &i in high_pressure_turfs.iter() {
+	for i in high_pressure_turfs {
 		if found_turfs.contains(&i)
 			|| turf_gases().get(&i).map_or(true, |m| {
 				!m.enabled()
@@ -817,7 +844,7 @@ pub(crate) fn equalize(
 		}
 		let m = maybe_m.unwrap();
 		let maybe_turfs = flood_fill_equalize_turfs(
-			i,
+			*i,
 			*m,
 			equalize_turf_limit,
 			equalize_hard_turf_limit,
