@@ -2,8 +2,7 @@ name: Build Release
 
 on:
   push:
-    tags:
-      - '*'
+    tags: [ "v[0-9]+.*" ]
 
 jobs:
   release:
@@ -14,7 +13,7 @@ jobs:
         include:
           - os: ubuntu-latest
             target_name: i686-unknown-linux-gnu
-            artifact_name: auxmos.so
+            artifact_name: libauxmos.so
           - os: windows-latest
             target_name: i686-pc-windows-msvc
             artifact_name: auxmos.dll
