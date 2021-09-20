@@ -64,4 +64,4 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: target/release/${{ matrix.target_name }}/${{ matrix.artifact_name }}
-          tag: ${{ github.event.client_payload.new_version }}
+          tag: ${{ github.ref }}
