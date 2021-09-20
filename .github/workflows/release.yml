@@ -1,8 +1,8 @@
 name: Build Release
 
 on:
-  push:
-    tags: [ "^[0-9]+.*" ]
+  release:
+    types: [published]
 
 jobs:
   release:
