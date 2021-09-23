@@ -2,6 +2,8 @@ use super::*;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+use std::{thread, time};
+
 use indexmap::IndexSet;
 
 use ahash::RandomState;
@@ -19,7 +21,7 @@ type MixWithID = (TurfID, TurfMixture);
 #[hook("/turf/proc/register_firelocks")]
 fn _hook_register_firelocks() {
 	let id = unsafe { src.raw.data.id };
-	firelock_turfs().insert(id, ());
+	firelock_turfs().insert(id);
 	Ok(Value::null())
 }
 
@@ -218,7 +220,7 @@ fn explosively_depressurize(
 			for (_, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
 				let mut insert_success = false;
 
-				if firelock_turfs().contains_key(&loc) {
+				if firelock_turfs().contains(&loc) {
 					unsafe { Value::turf_by_id_unchecked(i) }.call(
 						"consider_firelocks",
 						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
@@ -230,7 +232,7 @@ fn explosively_depressurize(
 						info.entry(loc).or_default().take();
 					}
 					continue;
-				} else if firelock_turfs().contains_key(&i) {
+				} else if firelock_turfs().contains(&i) {
 					unsafe { Value::turf_by_id_unchecked(i) }.call(
 						"consider_firelocks",
 						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
@@ -254,6 +256,7 @@ fn explosively_depressurize(
 		let cur_info = info.entry(*i).or_default().get_mut();
 		cur_info.curr_transfer_dir = 6;
 	}
+	thread::sleep(time::Duration::from_millis(1));
 	cur_queue_idx = 0;
 	let mut space_turf_len = 0;
 	let mut total_moles = 0_f64;
@@ -271,6 +274,10 @@ fn explosively_depressurize(
 		let m = *maybe_m.unwrap();
 		for (j, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
 			if let Some(adj_m) = { turf_gases().get(&loc) } {
+				//don't fucking touch disabled tiles
+				if !adj_m.enabled() {
+					continue;
+				}
 				let adj_orig = info.entry(loc).or_default();
 				let mut adj_info = adj_orig.get();
 				if !adj_m.is_immutable() {
@@ -445,8 +452,10 @@ fn flood_fill_equalize_turfs(
 						let adj_orig = info.entry(loc).or_default();
 						#[cfg(feature = "explosive_decompression")]
 						{
-							adj_orig.take();
-							border_turfs.push_back((loc, *adj_turf.value()));
+							if adj_turf.enabled() {
+								adj_orig.take();
+								border_turfs.push_back((loc, *adj_turf.value()));
+							}
 							if adj_turf.value().is_immutable() {
 								// Uh oh! looks like someone opened an airlock to space! TIME TO SUCK ALL THE AIR OUT!!!
 								// NOT ONE OF YOU IS GONNA SURVIVE THIS
@@ -761,14 +770,18 @@ fn process_planet_turfs(
 		for (j, loc) in adjacent_tile_ids(m.adjacency, i, max_x, max_y) {
 			if let Some(adj_orig) = info.get(&loc) {
 				let mut adj_info = adj_orig.get();
-				if firelock_turfs().contains_key(&loc)
-					|| firelock_turfs().contains_key(&i) {
+				if firelock_turfs().contains(&loc)
+					|| firelock_turfs().contains(&i) {
 					unsafe { Value::turf_by_id_unchecked(i) }.call(
 						"consider_firelocks",
 						&[&unsafe { Value::turf_by_id_unchecked(loc) }],
 					)?;
 				}
+
 				if let Some(adj) = turf_gases().get(&loc) {
+					if !adj.enabled() {
+						continue;
+					}
 					if adj_info.last_slow_queue_cycle == queue_cycle_slow
 							|| adj.value().planetary_atmos.is_some()
 						{
@@ -783,6 +796,7 @@ fn process_planet_turfs(
 		}
 		queue_idx += 1;
 	}
+	thread::sleep(time::Duration::from_millis(1));
 	for i in progression_order.iter().rev() {
 		if turf_gases().get(&i).is_none() {
 			continue;

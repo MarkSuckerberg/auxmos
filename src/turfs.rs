@@ -180,7 +180,7 @@ static mut TURF_TEMPERATURES: Option<DashMap<TurfID, ThermalInfo, FxBuildHasher>
 static mut PLANETARY_ATMOS: Option<DashMap<u32, Mixture, FxBuildHasher>> = None;
 // Turfs with firelocks are stored for explosive decompression speed
 #[cfg(feature = "explosive_decompression")]
-static mut FIRELOCK_TURFS: Option<DashMap<TurfID, (), FxBuildHasher>> = None;
+static mut FIRELOCK_TURFS: Option<dashmap::DashSet<TurfID, FxBuildHasher>> = None;
 
 #[init(partial)]
 fn _initialize_turf_statics() -> Result<(), String> {
@@ -190,7 +190,7 @@ fn _initialize_turf_statics() -> Result<(), String> {
 		PLANETARY_ATMOS = Some(DashMap::with_hasher(FxBuildHasher::default()));
 		#[cfg(feature = "explosive_decompression")]
 		{
-			FIRELOCK_TURFS = Some(DashMap::with_hasher(FxBuildHasher::default()));
+			FIRELOCK_TURFS = Some(dashmap::DashSet::with_hasher(FxBuildHasher::default()));
 		}
 	};
 	Ok(())
@@ -222,7 +222,7 @@ fn turf_temperatures() -> &'static DashMap<TurfID, ThermalInfo, FxBuildHasher> {
 }
 
 #[cfg(feature = "explosive_decompression")]
-fn firelock_turfs() -> &'static DashMap<TurfID, (), FxBuildHasher> {
+fn firelock_turfs() -> &'static dashmap::DashSet<TurfID, FxBuildHasher> {
 	unsafe { FIRELOCK_TURFS.as_ref().unwrap() }
 }
 
