@@ -130,8 +130,6 @@ fn finalize_eq(
 	}
 	for (j, adj_id) in adjacent_tile_ids(turf.adjacency, i, max_x, max_y) {
 		let amount = transfer_dirs[j as usize];
-		let temp = turf.return_temperature();
-		let vol = turf.return_volume();
 		if amount > 0.0 {
 			if turf.total_moles() < amount {
 				finalize_eq_neighbors(i, turf, transfer_dirs, info, max_x, max_y);
@@ -152,7 +150,7 @@ fn finalize_eq(
 					}
 					adj_orig.set(adj_info);
 					let _ = sender.send(Box::new(move || {
-						let real_amount = Value::from(amount * R_IDEAL_GAS_EQUATION * temp / vol);
+						let real_amount = Value::from(amount);
 						let turf = unsafe { Value::turf_by_id_unchecked(i as u32) };
 						let other_turf = unsafe { Value::turf_by_id_unchecked(adj_id as u32) };
 						if let Err(e) =
@@ -363,12 +361,6 @@ fn explosively_depressurize(
 
 		let sum = adj_m.total_moles();
 
-		let cur_temp = m.return_temperature();
-		let cur_vol = m.return_volume();
-
-		let adj_temp = adj_m.return_temperature();
-		let adj_vol = adj_m.return_volume();
-
 		cur_info.curr_transfer_amount += sum;
 		cur_orig.set(cur_info);
 
@@ -382,8 +374,7 @@ fn explosively_depressurize(
 
 		byond_turf.set(
 			byond_string!("pressure_difference"),
-			Value::from(cur_info.curr_transfer_amount
-				* R_IDEAL_GAS_EQUATION * cur_temp / cur_vol),
+			Value::from(cur_info.curr_transfer_amount),
 		)?;
 		byond_turf.set(
 			byond_string!("pressure_direction"),
@@ -394,8 +385,7 @@ fn explosively_depressurize(
 			let byond_turf_adj = unsafe { Value::turf_by_id_unchecked(loc) };
 			byond_turf_adj.set(
 				byond_string!("pressure_difference"),
-				Value::from(adj_info.curr_transfer_amount
-					* R_IDEAL_GAS_EQUATION * adj_temp / adj_vol),
+				Value::from(adj_info.curr_transfer_amount),
 			)?;
 			byond_turf_adj.set(
 				byond_string!("pressure_direction"),
