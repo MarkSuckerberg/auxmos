@@ -155,39 +155,6 @@ fn _process_turf_hook() {
 				}));
 				(low_pressure_turfs, high_pressure_turfs)
 			};
-			{
-				let start_time = Instant::now();
-				let processed_turfs = excited_group_processing(
-					max_x,
-					max_y,
-					group_pressure_goal,
-					&low_pressure_turfs,
-				);
-				let bench = start_time.elapsed().as_millis();
-				let _ = sender.try_send(Box::new(move || {
-					let ssair = auxtools::Value::globals().get(byond_string!("SSair"))?;
-					let prev_cost =
-						ssair
-							.get_number(byond_string!("cost_groups"))
-							.map_err(|_| {
-								runtime!(
-									"Attempt to interpret non-number value as number {} {}:{}",
-									std::file!(),
-									std::line!(),
-									std::column!()
-								)
-							})?;
-					ssair.set(
-						byond_string!("cost_groups"),
-						Value::from(0.8 * prev_cost + 0.2 * (bench as f32)),
-					)?;
-					ssair.set(
-						byond_string!("num_group_turfs_processed"),
-						Value::from(processed_turfs as f32),
-					)?;
-					Ok(Value::null())
-				}));
-			}
 			if equalize_enabled {
 				let start_time = Instant::now();
 				let processed_turfs = {
@@ -236,6 +203,39 @@ fn _process_turf_hook() {
 					)?;
 					ssair.set(
 						byond_string!("num_equalize_processed"),
+						Value::from(processed_turfs as f32),
+					)?;
+					Ok(Value::null())
+				}));
+			}
+			{
+				let start_time = Instant::now();
+				let processed_turfs = excited_group_processing(
+					max_x,
+					max_y,
+					group_pressure_goal,
+					&low_pressure_turfs,
+				);
+				let bench = start_time.elapsed().as_millis();
+				let _ = sender.try_send(Box::new(move || {
+					let ssair = auxtools::Value::globals().get(byond_string!("SSair"))?;
+					let prev_cost =
+						ssair
+							.get_number(byond_string!("cost_groups"))
+							.map_err(|_| {
+								runtime!(
+									"Attempt to interpret non-number value as number {} {}:{}",
+									std::file!(),
+									std::line!(),
+									std::column!()
+								)
+							})?;
+					ssair.set(
+						byond_string!("cost_groups"),
+						Value::from(0.8 * prev_cost + 0.2 * (bench as f32)),
+					)?;
+					ssair.set(
+						byond_string!("num_group_turfs_processed"),
 						Value::from(processed_turfs as f32),
 					)?;
 					Ok(Value::null())
