@@ -17,22 +17,6 @@ type TransferInfo = [f32; 7];
 
 type MixWithID = (TurfID, TurfMixture);
 
-#[cfg(feature = "explosive_decompression")]
-#[hook("/turf/proc/register_firelocks")]
-fn _hook_register_firelocks() {
-	let id = unsafe { src.raw.data.id };
-	firelock_turfs().insert(id);
-	Ok(Value::null())
-}
-
-#[cfg(feature = "explosive_decompression")]
-#[hook("/turf/proc/unregister_firelocks")]
-fn _hook_unregister_firelocks() {
-	let id = unsafe { src.raw.data.id };
-	firelock_turfs().remove(&id);
-	Ok(Value::null())
-}
-
 #[derive(Copy, Clone)]
 struct MonstermosInfo {
 	transfer_dirs: TransferInfo,
@@ -267,7 +251,7 @@ fn explosively_depressurize(
 		let cur_info = info.entry(*i).or_default().get_mut();
 		cur_info.curr_transfer_dir = 6;
 	}
-	thread::sleep(time::Duration::from_millis(1));
+	thread::sleep(time::Duration::from_millis(50));
 	cur_queue_idx = 0;
 	let mut space_turf_len = 0;
 	let mut total_moles = 0_f64;
@@ -799,7 +783,6 @@ fn process_planet_turfs(
 		}
 		queue_idx += 1;
 	}
-	thread::sleep(time::Duration::from_millis(1));
 	for i in progression_order.iter().rev() {
 		if turf_gases().get(&i).is_none() {
 			continue;
@@ -835,11 +818,11 @@ pub(crate) fn equalize(
 	high_pressure_turfs: &BTreeSet<TurfID>,
 ) -> usize {
 	let mut info: HashMap<TurfID, Cell<MonstermosInfo>, FxBuildHasher>
-		= HashMap::with_hasher(FxBuildHasher::default());
+		= HashMap::with_capacity_and_hasher(equalize_hard_turf_limit*2, FxBuildHasher::default());
 	let mut turfs_processed = 0;
 	let mut queue_cycle_slow = 1;
 	let mut found_turfs: HashSet<TurfID, FxBuildHasher>
-		= HashSet::with_hasher(FxBuildHasher::default());
+		= HashSet::with_capacity_and_hasher(equalize_hard_turf_limit*2, FxBuildHasher::default());
 	for i in high_pressure_turfs {
 		if found_turfs.contains(&i)
 			|| turf_gases().get(&i).map_or(true, |m| {
@@ -882,8 +865,8 @@ pub(crate) fn equalize(
 		}
 		let average_moles = (total_moles / (turfs.len() - planet_turfs.len()) as f64) as f32;
 
-		let mut giver_turfs:Vec<MixWithID> = Vec::new();
-		let mut taker_turfs:Vec<MixWithID> = Vec::new();
+		let mut giver_turfs:Vec<MixWithID> = Vec::with_capacity(turfs.len());
+		let mut taker_turfs:Vec<MixWithID> = Vec::with_capacity(turfs.len());
 
 		for &(i, m) in &turfs {
 			let cur_info = info.entry(i).or_default().get_mut();

@@ -123,6 +123,27 @@ fn _process_turf_hook() {
 					std::column!()
 				)
 			})? as i32;
+
+		//rebuild firelock lists
+		firelock_turfs().clear();
+		let firelocks_list = src
+			.get_list(byond_string!("firelocks"))
+			.map_err(|_| {
+				runtime!(
+					"Attempt to interpret non-list value as list {} {}:{}",
+					std::file!(),
+					std::line!(),
+					std::column!()
+				)
+			})?;
+
+		for i in 1..=firelocks_list.len() {
+			if let Ok(firelock) = firelocks_list.get(i) {
+				let val = firelock.get(byond_string!("loc"))?;
+				firelock_turfs().insert(unsafe { val.raw.data.id });
+			}
+		}
+
 		rayon::spawn(move || {
 			PROCESSING_TURF_STEP.store(PROCESS_PROCESSING, Ordering::SeqCst);
 			let sender = byond_callback_sender();
@@ -175,7 +196,7 @@ fn _process_turf_hook() {
 							equalize_hard_turf_limit,
 							max_x,
 							max_y,
-							&high_pressure_turfs
+							&high_pressure_turfs,
 						)
 					}
 					#[cfg(not(feature = "equalization"))]
